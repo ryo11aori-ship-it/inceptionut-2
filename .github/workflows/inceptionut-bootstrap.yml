@@ -29,7 +29,7 @@ jobs:
           x86[pos]=rel&0xff;x86[pos+1]=(rel>>8)&0xff;
           x86[pos+2]=(rel>>16)&0xff;x86[pos+3]=(rel>>24)&0xff;}
           void build_x86(){
-          E(0x48);E(0x81);E(0xec);E4(0x100); /* sub rsp, 0x100 (Safe Stack) */
+          E(0x48);E(0x81);E(0xec);E4(0x100); /* sub rsp, 0x100 */
           E(0x4c);E(0x8d);E(0x05);E4(0); /* lea r8,[rip+0] */
           uint32_t lea_pos=x_len;
           E(0x4d);E(0x31);E(0xc9); /* xor r9,r9 (PC) */
@@ -39,7 +39,7 @@ jobs:
           E(0x49);E(0x81);E(0xf9);E4(10000); /* cmp r9,10000 */
           int jge_halt=put_jmp(0x0f,0x8d);
           
-          /* Fetch A, B, C with Correct REX bits (r9 index) */
+          /* Fetch A, B, C */
           E(0x47);E(0x8b);E(0x14);E(0x88); /* mov r10d,[r8+r9*4] */
           E(0x47);E(0x8b);E(0x64);E(0x88);E(0x04); /* mov r12d,[r8+r9*4+4] */
           E(0x47);E(0x8b);E(0x6c);E(0x88);E(0x08); /* mov r13d,[r8+r9*4+8] */
@@ -50,7 +50,7 @@ jobs:
           /* IN Logic */
           E(0x41);E(0x81);E(0xfa);E4(9999); /* cmp r10d,9999 */
           int jne_skip_in=put_jmp(0x0f,0x85);
-          E(0x31);E(0xc0);E(0x31);E(0xff); /* sys_read(0, rsp+8, 1) */
+          E(0x31);E(0xc0);E(0x31);E(0xff); /* sys_read */
           E(0x48);E(0x8d);E(0x74);E(0x24);E(0x08);
           E(0xba);E4(1);E(0x0f);E(0x05);
           E(0x48);E(0x83);E(0xf8);E(0x01);
@@ -70,9 +70,10 @@ jobs:
           /* OUT Logic */
           E(0x41);E(0x81);E(0xfc);E4(9999); /* cmp r12d,9999 */
           int jne_skip_out=put_jmp(0x0f,0x85);
-          E(0x31);E(0xc0);E(0x41);E(0x29);E(0xd0); /* eax = 0 - r10d */
+          E(0x31);E(0xc0); /* xor eax, eax */
+          E(0x44);E(0x29);E(0xd0); /* sub eax, r10d  <-- BUG FIXED HERE! */
           E(0x88);E(0x44);E(0x24);E(0x08); /* mov [rsp+8],al */
-          E(0xb8);E4(1);E(0xbf);E4(1); /* sys_write(1, rsp+8, 1) */
+          E(0xb8);E4(1);E(0xbf);E4(1); /* sys_write */
           E(0x48);E(0x8d);E(0x74);E(0x24);E(0x08);
           E(0xba);E4(1);E(0x0f);E(0x05);
           E(0x45);E(0x31);E(0xf6);E(0x45);E(0x29);E(0xd6); /* r14d = 0 - r10d */
@@ -85,7 +86,7 @@ jobs:
           E(0x47);E(0x89);E(0x34);E(0xa0); /* mov [r8+r12*4],r14d */
           patch_jmp(jmp_check_jmp,x_len);
           
-          /* Jump Evaluation */
+          /* Jump Eval */
           E(0x41);E(0x83);E(0xfe);E(0x00); /* cmp r14d,0 */
           int jg_next_inst=put_jmp(0x0f,0x8f);
           E(0x4d);E(0x63);E(0xcd); /* movsxd r9,r13d */
@@ -145,14 +146,13 @@ jobs:
           #include<stdint.h>
           int main(){
           int32_t m[10000]={0};
-          m[0]=3;m[1]=3;m[2]=3;
-          m[3]=4;m[4]=4;m[5]=6;
-          m[6]=9999;m[7]=4;m[8]=12;
-          m[9]=3;m[10]=3;m[11]=9999;
-          m[12]=4;m[13]=9999;m[14]=15;
-          m[15]=3;m[16]=3;m[17]=0;
+          m[0]=16;m[1]=16;m[2]=3;   /* T=0, jump 3 */
+          m[3]=9999;m[4]=16;m[5]=9; /* T=0-IN. If char(<=0) jump 9. If EOF(>0) next(6) */
+          m[6]=0;m[7]=0;m[8]=9999;  /* HALT */
+          m[9]=16;m[10]=9999;m[11]=12; /* OUT=0-T(char). jump 12 */
+          m[12]=15;m[13]=15;m[14]=0; /* Z=0, jump 0 */
           FILE*f=fopen("echo.inc","wb");
-          for(int i=0;i<18;i++){
+          for(int i=0;i<15;i++){
           for(int b=31;b>=0;b--){
           if((m[i]>>b)&1)fputc('\t',f);else fputc(' ',f);
           }
@@ -167,17 +167,12 @@ jobs:
           ./compiler.elf echo.inc echo.elf
           chmod +x echo.elf
 
-      - name: 4. Test Native Echo (With Deep OS Trace)
+      - name: 4. Test Native Echo
         run: |
-          sudo apt-get install -y strace
           echo -n "HELLO NATIVE WORLD" > input.txt
-          
-          echo "--- STRACE LOGGING ---"
-          timeout 1s strace -o trace.log ./echo.elf < input.txt > output.txt || true
-          cat trace.log
-          echo "----------------------"
-          
+          ./echo.elf < input.txt > output.txt
           cat output.txt
+          echo ""
           if grep -q "HELLO NATIVE WORLD" output.txt; then
             echo "✅ Native I/O Engine Successfully Built and Executed!"
           else
