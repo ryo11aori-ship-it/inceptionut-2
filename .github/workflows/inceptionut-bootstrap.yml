@@ -162,64 +162,40 @@ jobs:
           0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
           0,0,0x20,0,0,0,0,0};
           int pad=(x_len+3)&~3;
-          long fsz=120+pad+80000;
-          memcpy(elf+96,&fsz,4);memcpy(elf+104,&fsz,4);
           int d_ptr=1000;
           for(int i=0;i<120;i++) m[d_ptr++] = -elf[i];
           for(int i=0;i<x_len;i++) m[d_ptr++] = -x86[i];
           for(int i=x_len;i<pad;i++) m[d_ptr++] = 0;
           int end_ptr=d_ptr;
-          m[8000]=0; m[8001]=0; m[8002]=0; m[8006]=1000; m[8007]=end_ptr;
-          m[8010]=-1; m[8011]=32; m[8012]=9; m[8013]=32; m[8014]=1; m[8020]=20000;
+          m[8000]=0; m[8001]=0; m[8002]=0; m[8003]=0; m[8004]=0;
+          m[8006]=1000; m[8007]=end_ptr; m[8010]=-1; m[8016]=10; m[8017]=31;
           pc=0;
           int L_head=pc;
           set0(8001);add(8007,8001);sub(8006,8001);
-          int j1=pc;S(8001,8000,0);
-          int tA=pc+15;write_A(8006,tA);
-          S(0,9999,pc+3);
+          S(8000,8001,0); int p_to_word=pc-1;
+          int t1=pc; S(0,9999,pc+3); write_A(8006,t1);
           sub(8010,8006);
           jmp(L_head);
-          m[j1+2]=pc;
+          m[p_to_word]=pc;
           int L_Word=pc;
-          int j2=pc;S(8020,8000,0);
-          set0(8022);
-          set0(8021);add(8013,8021);
-          int L_Bit=pc;
-          int j3=pc;S(8021,8000,0);
+          set0(8003); set0(8004);
           int L_Read=pc;
           set0(8002);S(9999,8002,pc+3);
-          int j_eof=pc;S(8002,8000,0);
-          set0(8001);add(8002,8001);sub(8011,8001);
-          int j_sp1=pc;S(8001,8000,0);
-          jmp(L_Read);
-          m[j_sp1+2]=pc;
-          sub(8010,8001);
-          int j_tab=pc;S(8001,8000,0);
-          add(8022,8022);
-          sub(8014,8021);
-          jmp(L_Bit);
-          m[j_tab+2]=pc;
-          set0(8001);add(8002,8001);sub(8012,8001);
-          int j_tb1=pc;S(8001,8000,0);
-          jmp(L_Read);
-          m[j_tb1+2]=pc;
-          sub(8010,8001);
-          int j_tb2=pc;S(8001,8000,0);
-          add(8022,8022);
-          sub(8014,8022);
-          sub(8014,8021);
-          jmp(L_Bit);
-          m[j_tb2+2]=pc;
-          jmp(L_Read);
-          m[j_eof+2]=pc;
-          add(8022,8022);
-          sub(8014,8021);
-          jmp(L_Bit);
-          m[j3+2]=pc;
-          S(8022,9998,pc+3);
-          sub(8014,8020);
+          S(8000,8002,0); int peof=pc-1;
+          add(8003,8003);
+          set0(8001);add(8002,8001);sub(8016,8001);
+          S(8000,8001,0); int ptab=pc-1;
+          int L_after_bit=pc;
+          sub(8010,8004);
+          set0(8001);add(8004,8001);sub(8017,8001);
+          S(8000,8001,L_Read);
+          set0(8001);sub(8003,8001);
+          S(8001,9998,pc+3);
           jmp(L_Word);
-          m[j2+2]=pc;
+          m[ptab]=pc;
+          sub(8010,8003);
+          jmp(L_after_bit);
+          m[peof]=pc;
           S(0,0,9999);
           FILE*f=fopen("compiler.inc","wb");
           for(int i=0;i<20000;i++){
@@ -243,13 +219,13 @@ jobs:
         run: |
           sudo apt-get install -y strace
           echo "--- STAGE 2 STRACE LOG ---"
-          strace -o trace2.log ./compiler1.elf < compiler.inc > compiler2.elf || true
+          timeout 10s strace -o trace2.log ./compiler1.elf < compiler.inc > compiler2.elf || true
           cat trace2.log | tail -n 30
           chmod +x compiler2.elf || true
 
       - name: 5. Stage 3 (Subleq Compiler -> compiler3.elf)
         run: |
-          ./compiler2.elf < compiler.inc > compiler3.elf || true
+          timeout 10s ./compiler2.elf < compiler.inc > compiler3.elf || true
           chmod +x compiler3.elf || true
 
       - name: 6. Verify Absolute Fixed Point
