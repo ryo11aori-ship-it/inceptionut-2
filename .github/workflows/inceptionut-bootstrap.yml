@@ -38,9 +38,12 @@ jobs:
           int jl_halt=put_jmp(0x0f,0x8c);
           E(0x49);E(0x81);E(0xf9);E4(10000); /* cmp r9,10000 */
           int jge_halt=put_jmp(0x0f,0x8d);
-          E(0x45);E(0x8b);E(0x14);E(0x88); /* mov r10d,[r8+r9*4] */
-          E(0x47);E(0x8b);E(0x5c);E(0x88);E(0x04); /* mov r11d,[r8+r9*4+4] */
+          
+          /* Fetch A, B, C with Correct REX bits (r9 index) */
+          E(0x47);E(0x8b);E(0x14);E(0x88); /* mov r10d,[r8+r9*4] */
+          E(0x47);E(0x8b);E(0x64);E(0x88);E(0x04); /* mov r12d,[r8+r9*4+4] */
           E(0x47);E(0x8b);E(0x6c);E(0x88);E(0x08); /* mov r13d,[r8+r9*4+8] */
+          
           E(0x41);E(0x81);E(0xfd);E4(9999); /* cmp r13d,9999 */
           int je_halt_c=put_jmp(0x0f,0x84);
           
@@ -65,7 +68,7 @@ jobs:
           patch_jmp(jmp_do_sub,x_len);
           
           /* OUT Logic */
-          E(0x41);E(0x81);E(0xfb);E4(9999); /* cmp r11d,9999 */
+          E(0x41);E(0x81);E(0xfc);E4(9999); /* cmp r12d,9999 */
           int jne_skip_out=put_jmp(0x0f,0x85);
           E(0x31);E(0xc0);E(0x41);E(0x29);E(0xd0); /* eax = 0 - r10d */
           E(0x88);E(0x44);E(0x24);E(0x08); /* mov [rsp+8],al */
@@ -77,9 +80,9 @@ jobs:
           
           /* Normal Sub B */
           patch_jmp(jne_skip_out,x_len);
-          E(0x47);E(0x8b);E(0x34);E(0x98); /* mov r14d,[r8+r11*4] */
+          E(0x47);E(0x8b);E(0x34);E(0xa0); /* mov r14d,[r8+r12*4] */
           E(0x45);E(0x29);E(0xd6); /* sub r14d,r10d */
-          E(0x47);E(0x89);E(0x34);E(0x98); /* mov [r8+r11*4],r14d */
+          E(0x47);E(0x89);E(0x34);E(0xa0); /* mov [r8+r12*4],r14d */
           patch_jmp(jmp_check_jmp,x_len);
           
           /* Jump Evaluation */
@@ -167,7 +170,7 @@ jobs:
       - name: 4. Test Native Echo (With Deep OS Trace)
         run: |
           sudo apt-get install -y strace
-          echo "HELLO NATIVE WORLD" > input.txt
+          echo -n "HELLO NATIVE WORLD" > input.txt
           
           echo "--- STRACE LOGGING ---"
           timeout 1s strace -o trace.log ./echo.elf < input.txt > output.txt || true
