@@ -32,11 +32,11 @@ jobs:
           int loop_start=x_len;
           E(0x49);E(0x83);E(0xf9);E(0x00);
           int jl_halt=put_jmp(0x0f,0x8c);
-          E(0x49);E(0x81);E(0xf9);E4(20000);
+          E(0x49);E(0x81);E(0xf9);E4(19997);
           int jge_halt=put_jmp(0x0f,0x8d);
-          E(0x47);E(0x8b);E(0x14);E(0x88);
-          E(0x47);E(0x8b);E(0x64);E(0x88);E(0x04);
-          E(0x47);E(0x8b);E(0x6c);E(0x88);E(0x08);
+          E(0x4f);E(0x8b);E(0x14);E(0x88);
+          E(0x4f);E(0x8b);E(0x64);E(0x88);E(0x04);
+          E(0x4f);E(0x8b);E(0x6c);E(0x88);E(0x08);
           E(0x41);E(0x81);E(0xfd);E4(9999);
           int je_halt_c=put_jmp(0x0f,0x84);
           E(0x41);E(0x81);E(0xfa);E4(9999);
@@ -53,7 +53,7 @@ jobs:
           patch_jmp(jmp_after_in,x_len);
           int jmp_do_sub=put_jmp(0xe9,0);
           patch_jmp(jne_skip_in,x_len);
-          E(0x47);E(0x8b);E(0x14);E(0x90);
+          E(0x4f);E(0x8b);E(0x14);E(0x90);
           patch_jmp(jmp_do_sub,x_len);
           E(0x41);E(0x81);E(0xfc);E4(9999);
           int je_out_1=put_jmp(0x0f,0x84);
@@ -74,9 +74,9 @@ jobs:
           E(0x45);E(0x31);E(0xf6);E(0x45);E(0x29);E(0xd6);
           int jmp_check_jmp=put_jmp(0xe9,0);
           patch_jmp(jne_skip_out,x_len);
-          E(0x47);E(0x8b);E(0x34);E(0xa0);
+          E(0x4f);E(0x8b);E(0x34);E(0xa0);
           E(0x45);E(0x29);E(0xd6);
-          E(0x47);E(0x89);E(0x34);E(0xa0);
+          E(0x4f);E(0x89);E(0x34);E(0xa0);
           patch_jmp(jmp_check_jmp,x_len);
           E(0x41);E(0x83);E(0xfe);E(0x00);
           int jg_next_inst=put_jmp(0x0f,0x8f);
@@ -92,7 +92,8 @@ jobs:
           patch_jmp(jge_halt,halt_pos);
           patch_jmp(je_halt_c,halt_pos);
           E(0xb8);E4(60);E(0x31);E(0xff);E(0x0f);E(0x05);
-          uint32_t mem_offset=x_len-lea_pos;
+          uint32_t pad=(x_len+3)&~3;
+          uint32_t mem_offset=pad-lea_pos;
           x86[lea_pos-4]=mem_offset&0xff;
           x86[lea_pos-3]=(mem_offset>>8)&0xff;
           x86[lea_pos-2]=(mem_offset>>16)&0xff;
@@ -169,7 +170,7 @@ jobs:
           for(int i=x_len;i<pad;i++) m[d_ptr++] = 0;
           int end_ptr=d_ptr;
           m[8000]=0; m[8001]=0; m[8002]=0; m[8003]=0; m[8004]=0; m[8005]=0;
-          m[8006]=1000; m[8007]=end_ptr; m[8010]=-1; m[8011]=-32; m[8012]=-9; m[8013]=32; m[8015]=20000;
+          m[8006]=1000; m[8007]=end_ptr; m[8010]=-1; m[8011]=-32; m[8013]=32; m[8015]=20000;
           pc=0;
           int l1=pc;
           set0(8001);add(8006,8001);sub(8007,8001);
@@ -182,8 +183,7 @@ jobs:
           m[p1_jmp]=pc;
           int l2=pc;
           set0(8002);S(9999,8002,pc+3);
-          S(8002,8000,0); int peof=pc-1;
-          set0(8000);
+          set0(8009);S(8002,8009,0); int peof=pc-1;
           set0(8001);add(8002,8001);sub(8011,8001);
           S(8000,8001,0); int pspace=pc-1;
           add(8003,8003);sub(8010,8003);sub(8010,8004);
