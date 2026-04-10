@@ -11,7 +11,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # ← ここに追加：compiler.incを不可視文字（12スペース）だけで自動生成
       - name: Generate compiler.inc (invisible characters only)
         run: printf '            ' > compiler.inc
 
@@ -19,13 +18,19 @@ jobs:
         run: gcc -O2 -Wall -o compiler.elf compiler.c
 
       - name: Stage 1 - compiler.inc → compiler1.elf
-        run: ./compiler.elf compiler.inc compiler1.elf
+        run: |
+          ./compiler.elf compiler.inc compiler1.elf
+          chmod +x compiler1.elf
 
       - name: Stage 2 - compiler.inc → compiler2.elf
-        run: ./compiler1.elf compiler.inc compiler2.elf
+        run: |
+          ./compiler1.elf compiler.inc compiler2.elf
+          chmod +x compiler2.elf
 
       - name: Stage 3 - compiler.inc → compiler3.elf
-        run: ./compiler2.elf compiler.inc compiler3.elf
+        run: |
+          ./compiler2.elf compiler.inc compiler3.elf
+          chmod +x compiler3.elf
 
       - name: Fixed-point verification (SHA-256)
         run: |
