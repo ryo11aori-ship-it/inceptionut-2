@@ -1,18 +1,19 @@
 name: True Inceptionut Self-Host
-on: [push]
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+
 jobs:
   bootstrap:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
-      - name: 1. Setup C Seeds (compiler.c & forge_compiler.c)
+      - name: 1. Setup True AOT Compiler
         run: |
-          cat << 'EOF' > compiler.c
-          #include<stdio.h>
-          #include<stdlib.h>
-          #include<string.h>
-          #include<stdint.h>
+          cat << 'EOF' > x86_builder.h
           unsigned char x86[1024];int x_len=0;
           void E(unsigned char b){x86[x_len++]=b;}
           void E4(uint32_t b){E(b&0xff);E((b>>8)&0xff);E((b>>16)&0xff);E((b>>24)&0xff);}
@@ -24,77 +25,95 @@ jobs:
           x86[pos]=rel&0xff;x86[pos+1]=(rel>>8)&0xff;
           x86[pos+2]=(rel>>16)&0xff;x86[pos+3]=(rel>>24)&0xff;}
           void build_x86(){
-          E(0x48);E(0x81);E(0xec);E4(0x100); 
-          E(0x4c);E(0x8d);E(0x05);E4(0); 
+          E(0x48);E(0x81);E(0xec);E4(0x100);
+          E(0x4c);E(0x8d);E(0x05);E4(0);
           uint32_t lea_pos=x_len;
-          E(0x4d);E(0x31);E(0xc9); 
+          E(0x4d);E(0x31);E(0xc9);
           int loop_start=x_len;
-          E(0x49);E(0x83);E(0xf9);E(0x00); 
+          E(0x49);E(0x83);E(0xf9);E(0x00);
           int jl_halt=put_jmp(0x0f,0x8c);
-          E(0x49);E(0x81);E(0xf9);E4(10000); 
+          E(0x49);E(0x81);E(0xf9);E4(20000);
           int jge_halt=put_jmp(0x0f,0x8d);
-          E(0x47);E(0x8b);E(0x14);E(0x88); 
-          E(0x47);E(0x8b);E(0x64);E(0x88);E(0x04); 
-          E(0x47);E(0x8b);E(0x6c);E(0x88);E(0x08); 
-          E(0x41);E(0x81);E(0xfd);E4(9999); 
+          E(0x47);E(0x8b);E(0x14);E(0x88);
+          E(0x47);E(0x8b);E(0x64);E(0x88);E(0x04);
+          E(0x47);E(0x8b);E(0x6c);E(0x88);E(0x08);
+          E(0x41);E(0x81);E(0xfd);E4(9999);
           int je_halt_c=put_jmp(0x0f,0x84);
-          E(0x41);E(0x81);E(0xfa);E4(9999); 
+          E(0x41);E(0x81);E(0xfa);E4(9999);
           int jne_skip_in=put_jmp(0x0f,0x85);
-          E(0x31);E(0xc0);E(0x31);E(0xff); 
+          E(0x31);E(0xc0);E(0x31);E(0xff);
           E(0x48);E(0x8d);E(0x74);E(0x24);E(0x08);
           E(0xba);E4(1);E(0x0f);E(0x05);
           E(0x48);E(0x83);E(0xf8);E(0x01);
           int je_read_ok=put_jmp(0x0f,0x84);
-          E(0x41);E(0xba);E4(-1); 
+          E(0x41);E(0xba);E4(-1);
           int jmp_after_in=put_jmp(0xe9,0);
           patch_jmp(je_read_ok,x_len);
-          E(0x44);E(0x0f);E(0xb6);E(0x54);E(0x24);E(0x08); 
+          E(0x44);E(0x0f);E(0xb6);E(0x54);E(0x24);E(0x08);
           patch_jmp(jmp_after_in,x_len);
           int jmp_do_sub=put_jmp(0xe9,0);
           patch_jmp(jne_skip_in,x_len);
-          E(0x47);E(0x8b);E(0x14);E(0x90); 
+          E(0x47);E(0x8b);E(0x14);E(0x90);
           patch_jmp(jmp_do_sub,x_len);
-          E(0x41);E(0x81);E(0xfc);E4(9999); 
+          E(0x41);E(0x81);E(0xfc);E4(9999);
+          int je_out_1=put_jmp(0x0f,0x84);
+          E(0x41);E(0x81);E(0xfc);E4(9998);
           int jne_skip_out=put_jmp(0x0f,0x85);
-          E(0x44);E(0x89);E(0x54);E(0x24);E(0x08); 
-          E(0xb8);E4(1);E(0xbf);E4(1); 
+          E(0x31);E(0xc0);E(0x44);E(0x29);E(0xd0);
+          E(0x89);E(0x44);E(0x24);E(0x08);
+          E(0xba);E4(4);
+          int jmp_do_write=put_jmp(0xe9,0);
+          patch_jmp(je_out_1,x_len);
+          E(0x31);E(0xc0);E(0x44);E(0x29);E(0xd0);
+          E(0x88);E(0x44);E(0x24);E(0x08);
+          E(0xba);E4(1);
+          patch_jmp(jmp_do_write,x_len);
+          E(0xb8);E4(1);E(0xbf);E4(1);
           E(0x48);E(0x8d);E(0x74);E(0x24);E(0x08);
-          E(0xba);E4(4);E(0x0f);E(0x05); 
-          E(0x45);E(0x31);E(0xf6);E(0x45);E(0x29);E(0xd6); 
+          E(0x0f);E(0x05);
+          E(0x45);E(0x31);E(0xf6);E(0x45);E(0x29);E(0xd6);
           int jmp_check_jmp=put_jmp(0xe9,0);
           patch_jmp(jne_skip_out,x_len);
-          E(0x47);E(0x8b);E(0x34);E(0xa0); 
-          E(0x45);E(0x29);E(0xd6); 
-          E(0x47);E(0x89);E(0x34);E(0xa0); 
+          E(0x47);E(0x8b);E(0x34);E(0xa0);
+          E(0x45);E(0x29);E(0xd6);
+          E(0x47);E(0x89);E(0x34);E(0xa0);
           patch_jmp(jmp_check_jmp,x_len);
-          E(0x41);E(0x83);E(0xfe);E(0x00); 
+          E(0x41);E(0x83);E(0xfe);E(0x00);
           int jg_next_inst=put_jmp(0x0f,0x8f);
-          E(0x4d);E(0x63);E(0xcd); 
+          E(0x4d);E(0x63);E(0xcd);
           int jmp_loop_start1=put_jmp(0xe9,0);
           patch_jmp(jmp_loop_start1,loop_start);
           patch_jmp(jg_next_inst,x_len);
-          E(0x49);E(0x83);E(0xc1);E(0x03); 
+          E(0x49);E(0x83);E(0xc1);E(0x03);
           int jmp_loop_start2=put_jmp(0xe9,0);
           patch_jmp(jmp_loop_start2,loop_start);
           int halt_pos=x_len;
           patch_jmp(jl_halt,halt_pos);
           patch_jmp(jge_halt,halt_pos);
           patch_jmp(je_halt_c,halt_pos);
-          E(0xb8);E4(60);E(0x31);E(0xff);E(0x0f);E(0x05); 
+          E(0xb8);E4(60);E(0x31);E(0xff);E(0x0f);E(0x05);
           uint32_t mem_offset=x_len-lea_pos;
           x86[lea_pos-4]=mem_offset&0xff;
           x86[lea_pos-3]=(mem_offset>>8)&0xff;
           x86[lea_pos-2]=(mem_offset>>16)&0xff;
           x86[lea_pos-1]=(mem_offset>>24)&0xff;}
+          EOF
+          
+          cat << 'EOF' > compiler.c
+          #include<stdio.h>
+          #include<stdlib.h>
+          #include<string.h>
+          #include<stdint.h>
+          #include"x86_builder.h"
           int main(int argc,char**argv){
           if(argc<3)return 1;
           FILE*in=fopen(argv[1],"rb");if(!in)return 1;
           fseek(in,0,SEEK_END);long sz=ftell(in);rewind(in);
-          int32_t mem[10000]={0};long bit=0;
+          int32_t mem[20000]={0};long bit=0;
           for(long i=0;i<sz;i++){
           int ch=fgetc(in);
           if(ch==' ')bit++;
-          else if(ch=='\t'){mem[(bit/32)%10000]|=(1U<<(31-(bit%32)));bit++;}
+          else if(ch=='\t'){mem[(bit/32)%20000]|=(1U<<(31-(bit%32)));bit++;}
           }
           fclose(in);
           build_x86();
@@ -108,7 +127,7 @@ jobs:
           0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
           0,0,0x20,0,0,0,0,0};
           int pad=(x_len+3)&~3;
-          long fsz=120+pad+40000;
+          long fsz=120+pad+80000;
           memcpy(elf+96,&fsz,4);memcpy(elf+104,&fsz,4);
           FILE*out=fopen(argv[2],"wb");
           fwrite(elf,1,120,out);fwrite(x86,1,x_len,out);
@@ -117,8 +136,12 @@ jobs:
           fclose(out);return 0;}
           EOF
           
-          cat compiler.c > forge_compiler.c
-          cat << 'EOF' >> forge_compiler.c
+          cat << 'EOF' > forge_compiler.c
+          #include<stdio.h>
+          #include<stdlib.h>
+          #include<string.h>
+          #include<stdint.h>
+          #include"x86_builder.h"
           int32_t m[20000]={0}; int pc=0;
           void S(int a,int b,int c){m[pc++]=a;m[pc++]=b;m[pc++]=c;}
           void set0(int a){S(a,a,pc+3);}
@@ -126,7 +149,6 @@ jobs:
           void add(int s,int d){set0(8001);sub(s,8001);sub(8001,d);set0(8001);}
           void jmp2(int t){S(8000,8000,t);}
           void write_A(int ptr,int tA){set0(tA);add(ptr,tA);}
-          
           int main(){
           build_x86();
           unsigned char elf[120]={
@@ -139,17 +161,15 @@ jobs:
           0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
           0,0,0x20,0,0,0,0,0};
           int pad=(x_len+3)&~3;
-          long fsz=120+pad+40000;
+          long fsz=120+pad+80000;
           memcpy(elf+96,&fsz,4);memcpy(elf+104,&fsz,4);
-          
           int d_ptr=1000;
-          for(int i=0;i<120;i+=4) m[d_ptr++]=*(uint32_t*)(elf+i);
-          for(int i=0;i<pad;i+=4) m[d_ptr++]=*(uint32_t*)(x86+i);
+          for(int i=0;i<120;i++) m[d_ptr++] = -elf[i];
+          for(int i=0;i<x_len;i++) m[d_ptr++] = -x86[i];
+          for(int i=x_len;i<pad;i++) m[d_ptr++] = 0;
           int end_ptr=d_ptr;
-          
-          m[8000]=0; m[8001]=0; m[8002]=0; m[8003]=0; m[8004]=0; m[8005]=10000;
+          m[8000]=0; m[8001]=0; m[8002]=0; m[8003]=0; m[8004]=0; m[8005]=0;
           m[8006]=1000; m[8007]=end_ptr; m[8010]=-1; m[8011]=-32; m[8012]=-9; m[8013]=32; m[8015]=20000;
-          
           pc=0;
           int l1=pc;
           set0(8001);add(8006,8001);sub(8007,8001);
@@ -159,7 +179,6 @@ jobs:
           S(0,9999,pc+3);
           sub(8010,8006);
           jmp2(l1);
-          
           m[p1_jmp]=pc;
           int l2=pc;
           set0(8002);S(9999,8002,pc+3);
@@ -175,38 +194,28 @@ jobs:
           set0(8008);sub(8001,8008);
           S(8000,8008,0); int pflush=pc-1;
           jmp2(l2);
-          
           m[pflush]=pc;
-          int tA=pc+30; int tB=pc+31;
-          write_A(8005,tA); write_A(8005,tB);
-          S(0,0,pc+3);
           set0(8001);sub(8003,8001);
-          int tB2=pc+16; write_A(8005,tB2);
-          S(8001,0,pc+3);
-          sub(8010,8005);
+          S(8001,9998,pc+3);
           set0(8003);set0(8004);
+          sub(8010,8005);
           jmp2(l2);
-          
           m[peof]=pc;
-          set0(8000); m[8006]=10000;
+          set0(8000);
           int l3=pc;
-          set0(8001);add(8006,8001);sub(8015,8001);
+          set0(8001);add(8005,8001);sub(8015,8001);
           set0(8008);sub(8001,8008);
           S(8000,8008,0); int phalt=pc-1;
-          int t3=pc+15; write_A(8006,t3);
-          S(0,9999,pc+3);
-          sub(8010,8006);
+          S(8000,9998,pc+3);
+          sub(8010,8005);
           jmp2(l3);
-          
           m[phalt]=pc;
           S(0,0,9999);
-          
           FILE*f=fopen("compiler.inc","wb");
           for(int i=0;i<20000;i++){
           for(int b=31;b>=0;b--){
           if((m[i]>>b)&1)fputc('\t',f);else fputc(' ',f);
-          }
-          }
+          }}
           fclose(f);return 0;}
           EOF
           gcc -O2 -Wall -o compiler.elf compiler.c
