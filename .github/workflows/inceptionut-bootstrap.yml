@@ -11,28 +11,80 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: 1. Setup C Seeds (compiler.c and forge_echo.c)
+      - name: 1. Setup True AOT Compiler (compiler.c)
         run: |
           cat << 'EOF' > compiler.c
           #include<stdio.h>
           #include<stdlib.h>
           #include<string.h>
           #include<stdint.h>
-          unsigned char x86[]={
-          0x4c,0x8d,0x05,0x9b,0x00,0x00,0x00,0x4d,0x31,0xc9,
-          0x43,0x8b,0x04,0x88,0x43,0x8b,0x5c,0x88,0x04,0x43,0x8b,0x4c,0x88,0x08,
-          0x3d,0x0f,0x27,0x00,0x00,0x74,0x06,0x41,0x8b,0x3c,0x80,0xeb,0x1d,
-          0xb8,0x00,0x00,0x00,0x00,0x31,0xff,0x48,0x8d,0x74,0x24,0xf8,0xba,
-          0x01,0x00,0x00,0x00,0x0f,0x05,0x48,0x83,0xf8,0x01,0x74,0x07,0xbf,
-          0xff,0xff,0xff,0xff,0xeb,0x05,0x0f,0xbe,0x7c,0x24,0xf8,0x81,0xfb,
-          0x0f,0x27,0x00,0x00,0x74,0x06,0x41,0x29,0x3c,0x98,0x41,0x8b,0x34,
-          0x98,0xeb,0x19,0xf7,0xdf,0x89,0xfe,0x40,0x88,0x74,0x24,0xf8,0x51,
-          0xb8,0x01,0x00,0x00,0x00,0xbf,0x01,0x00,0x00,0x00,0x48,0x89,0xe6,
-          0xba,0x01,0x00,0x00,0x00,0x0f,0x05,0x59,0x83,0xfe,0x00,0x7e,0x06,
-          0x49,0x83,0xc1,0x03,0xe9,0x81,0xff,0xff,0xff,0x81,0xf9,0x0f,0x27,
-          0x00,0x00,0x74,0x08,0x49,0x89,0xc9,0xe9,0x71,0xff,0xff,0xff,0xb8,
-          0x3c,0x00,0x00,0x00,0x31,0xff,0x0f,0x05
-          };
+          unsigned char x86[1024];int x_len=0;
+          void E(unsigned char b){x86[x_len++]=b;}
+          void E4(uint32_t b){E(b&0xff);E((b>>8)&0xff);E((b>>16)&0xff);E((b>>24)&0xff);}
+          int put_jmp(unsigned char op1,unsigned char op2){
+          if(op2){E(op1);E(op2);}else{E(op1);}
+          int pos=x_len;E4(0);return pos;}
+          void patch_jmp(int pos,int target){
+          uint32_t rel=target-(pos+4);
+          x86[pos]=rel&0xff;x86[pos+1]=(rel>>8)&0xff;
+          x86[pos+2]=(rel>>16)&0xff;x86[pos+3]=(rel>>24)&0xff;}
+          void build_x86(){
+          E(0x4c);E(0x8d);E(0x05);E4(0); /* lea r8,[rip+0] (PATCHED LATER) */
+          E(0x4d);E(0x31);E(0xc9); /* xor r9,r9 (PC=0) */
+          int loop_start=x_len;
+          E(0x49);E(0x83);E(0xf9);E(0x00); /* cmp r9,0 */
+          int jl_halt=put_jmp(0x0f,0x8c);
+          E(0x49);E(0x81);E(0xf9);E4(10000); /* cmp r9,10000 */
+          int jge_halt=put_jmp(0x0f,0x8d);
+          E(0x43);E(0x8b);E(0x04);E(0x88); /* mov eax,[r8+r9*4] */
+          E(0x43);E(0x8b);E(0x5c);E(0x88);E(0x04); /* mov ebx,[r8+r9*4+4] */
+          E(0x43);E(0x8b);E(0x4c);E(0x88);E(0x08); /* mov ecx,[r8+r9*4+8] */
+          E(0x3d);E4(9999); /* cmp eax,9999 (IN) */
+          int jne_skip_in=put_jmp(0x0f,0x85);
+          E(0x31);E(0xc0);E(0x31);E(0xff); /* sys_read(0, rsp-8, 1) */
+          E(0x48);E(0x8d);E(0x74);E(0x24);E(0xf8);
+          E(0xba);E4(1);E(0x0f);E(0x05);
+          E(0x48);E(0x83);E(0xf8);E(0x01);
+          int je_read_ok=put_jmp(0x0f,0x84);
+          E(0xc7);E(0x44);E(0x24);E(0xf8);E4(-1); /* EOF -> -1 */
+          patch_jmp(je_read_ok,x_len);
+          E(0x4c);E(0x63);E(0x54);E(0x24);E(0xf8); /* r10 = input */
+          int jmp_do_sub=put_jmp(0xe9,0);
+          patch_jmp(jne_skip_in,x_len);
+          E(0x45);E(0x8b);E(0x14);E(0x80); /* r10 = mem[A] */
+          patch_jmp(jmp_do_sub,x_len);
+          E(0x81);E(0xfb);E4(9999); /* cmp ebx,9999 (OUT) */
+          int jne_skip_out=put_jmp(0x0f,0x85);
+          E(0x45);E(0x31);E(0xdb);E(0x45);E(0x29);E(0xd3); /* r11 = 0 - r10 */
+          E(0x44);E(0x88);E(0x5c);E(0x24);E(0xf8);
+          E(0xb8);E4(1);E(0xbf);E4(1); /* sys_write(1, rsp-8, 1) */
+          E(0x48);E(0x8d);E(0x74);E(0x24);E(0xf8);
+          E(0xba);E4(1);E(0x0f);E(0x05);
+          int jmp_check_jmp=put_jmp(0xe9,0);
+          patch_jmp(jne_skip_out,x_len);
+          E(0x45);E(0x8b);E(0x1c);E(0x98); /* r11 = mem[B] */
+          E(0x45);E(0x29);E(0xd3); /* r11 = r11 - r10 */
+          E(0x45);E(0x89);E(0x1c);E(0x98); /* mem[B] = r11 */
+          patch_jmp(jmp_check_jmp,x_len);
+          E(0x41);E(0x83);E(0xfb);E(0x00); /* cmp r11, 0 */
+          int jg_next_inst=put_jmp(0x0f,0x8f);
+          E(0x81);E(0xf9);E4(9999); /* cmp ecx,9999 (HALT) */
+          int je_halt_c=put_jmp(0x0f,0x84);
+          E(0x49);E(0x89);E(0xc9); /* pc = C */
+          int jmp_loop_start1=put_jmp(0xe9,0);
+          patch_jmp(jmp_loop_start1,loop_start);
+          patch_jmp(jg_next_inst,x_len);
+          E(0x49);E(0x83);E(0xc1);E(0x03); /* pc += 3 */
+          int jmp_loop_start2=put_jmp(0xe9,0);
+          patch_jmp(jmp_loop_start2,loop_start);
+          int halt_pos=x_len;
+          patch_jmp(jl_halt,halt_pos);
+          patch_jmp(jge_halt,halt_pos);
+          patch_jmp(je_halt_c,halt_pos);
+          E(0xb8);E4(60);E(0x31);E(0xff);E(0x0f);E(0x05); /* sys_exit(0) */
+          uint32_t mem_offset=x_len-7;
+          x86[3]=mem_offset&0xff;x86[4]=(mem_offset>>8)&0xff;
+          x86[5]=(mem_offset>>16)&0xff;x86[6]=(mem_offset>>24)&0xff;}
           int main(int argc,char**argv){
           if(argc<3)return 1;
           FILE*in=fopen(argv[1],"rb");if(!in)return 1;
@@ -44,6 +96,7 @@ jobs:
           else if(ch=='\t'){mem[(bit/4)%10000]|=(1<<(3-(bit%4)));bit++;}
           }
           fclose(in);
+          build_x86();
           unsigned char elf[120]={
           0x7f,0x45,0x4c,0x46,2,1,1,0,0,0,0,0,0,0,0,0,
           2,0,0x3e,0,1,0,0,0,0x78,0,0x40,0,0,0,0,0,
@@ -53,33 +106,33 @@ jobs:
           0,0,0x40,0,0,0,0,0,0,0,0x40,0,0,0,0,0,
           0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
           0,0,0x20,0,0,0,0,0};
-          long fsz=120+sizeof(x86)+sizeof(mem);
+          long fsz=120+x_len+sizeof(mem);
           memcpy(elf+104,&fsz,4);memcpy(elf+112,&fsz,4);
           FILE*out=fopen(argv[2],"wb");
-          fwrite(elf,1,120,out);fwrite(x86,1,sizeof(x86),out);fwrite(mem,1,sizeof(mem),out);
+          fwrite(elf,1,120,out);fwrite(x86,1,x_len,out);fwrite(mem,1,sizeof(mem),out);
           fclose(out);return 0;
           }
           EOF
-          
+          gcc -O2 -Wall -o compiler.elf compiler.c
+
+      - name: 2. Forge Echo (.inc)
+        run: |
           cat << 'EOF' > forge_echo.c
           #include<stdio.h>
           int main(){
           int m[10000]={0};
-          m[3]=0;m[4]=0;m[5]=6;
-          m[6]=1;m[7]=1;m[8]=9;
-          m[9]=9999;m[10]=1;m[11]=12;
-          m[12]=1;m[13]=9999;m[14]=3;
+          m[0]=4;m[1]=4;m[2]=3;
+          m[3]=3;m[4]=3;m[5]=6;
+          m[6]=9999;m[7]=3;m[8]=12;
+          m[9]=4;m[10]=4;m[11]=9999;
+          m[12]=3;m[13]=9999;m[14]=0;
           FILE*f=fopen("echo.inc","wb");
           char map[10][5]={"    ","   \t","  \t ","  \t\t"," \t  "," \t \t"," \t\t "," \t\t\t","\t   ","\t  \t"};
           for(int i=0;i<15;i++)fprintf(f,"%s",map[m[i]]);
           fclose(f);return 0;}
           EOF
-          
-          gcc -O2 -Wall -o compiler.elf compiler.c
           gcc -O2 -Wall -o forge_echo.elf forge_echo.c
-
-      - name: 2. Forge Echo (.inc)
-        run: ./forge_echo.elf
+          ./forge_echo.elf
 
       - name: 3. Compile Echo (.inc -> .elf)
         run: |
