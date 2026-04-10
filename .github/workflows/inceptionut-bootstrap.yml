@@ -11,6 +11,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # ← ここに追加：compiler.incを不可視文字（12スペース）だけで自動生成
+      - name: Generate compiler.inc (invisible characters only)
+        run: printf '            ' > compiler.inc
+
       - name: Build bootstrap compiler (C)
         run: gcc -O2 -Wall -o compiler.elf compiler.c
 
