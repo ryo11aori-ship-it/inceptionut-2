@@ -1,17 +1,12 @@
-name: Inceptionut Self-Host Bootstrap
-
-on:
-  push:
-    branches: [ main ]
-  pull_request:
-
+name: True Inceptionut Self-Host
+on: [push]
 jobs:
   bootstrap:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
-      - name: 1. Setup True AOT Compiler (compiler.c)
+      - name: 1. Setup C Seeds (compiler.c & forge_compiler.c)
         run: |
           cat << 'EOF' > compiler.c
           #include<stdio.h>
@@ -29,87 +24,68 @@ jobs:
           x86[pos]=rel&0xff;x86[pos+1]=(rel>>8)&0xff;
           x86[pos+2]=(rel>>16)&0xff;x86[pos+3]=(rel>>24)&0xff;}
           void build_x86(){
-          E(0x48);E(0x81);E(0xec);E4(0x100); /* sub rsp, 0x100 */
-          E(0x4c);E(0x8d);E(0x05);E4(0); /* lea r8,[rip+0] */
+          E(0x48);E(0x81);E(0xec);E4(0x100); 
+          E(0x4c);E(0x8d);E(0x05);E4(0); 
           uint32_t lea_pos=x_len;
-          E(0x4d);E(0x31);E(0xc9); /* xor r9,r9 (PC) */
+          E(0x4d);E(0x31);E(0xc9); 
           int loop_start=x_len;
-          E(0x49);E(0x83);E(0xf9);E(0x00); /* cmp r9,0 */
+          E(0x49);E(0x83);E(0xf9);E(0x00); 
           int jl_halt=put_jmp(0x0f,0x8c);
-          E(0x49);E(0x81);E(0xf9);E4(10000); /* cmp r9,10000 */
+          E(0x49);E(0x81);E(0xf9);E4(10000); 
           int jge_halt=put_jmp(0x0f,0x8d);
-          
-          /* Fetch A, B, C */
-          E(0x47);E(0x8b);E(0x14);E(0x88); /* mov r10d,[r8+r9*4] */
-          E(0x47);E(0x8b);E(0x64);E(0x88);E(0x04); /* mov r12d,[r8+r9*4+4] */
-          E(0x47);E(0x8b);E(0x6c);E(0x88);E(0x08); /* mov r13d,[r8+r9*4+8] */
-          
-          E(0x41);E(0x81);E(0xfd);E4(9999); /* cmp r13d,9999 */
+          E(0x47);E(0x8b);E(0x14);E(0x88); 
+          E(0x47);E(0x8b);E(0x64);E(0x88);E(0x04); 
+          E(0x47);E(0x8b);E(0x6c);E(0x88);E(0x08); 
+          E(0x41);E(0x81);E(0xfd);E4(9999); 
           int je_halt_c=put_jmp(0x0f,0x84);
-          
-          /* IN Logic */
-          E(0x41);E(0x81);E(0xfa);E4(9999); /* cmp r10d,9999 */
+          E(0x41);E(0x81);E(0xfa);E4(9999); 
           int jne_skip_in=put_jmp(0x0f,0x85);
-          E(0x31);E(0xc0);E(0x31);E(0xff); /* sys_read */
+          E(0x31);E(0xc0);E(0x31);E(0xff); 
           E(0x48);E(0x8d);E(0x74);E(0x24);E(0x08);
           E(0xba);E4(1);E(0x0f);E(0x05);
           E(0x48);E(0x83);E(0xf8);E(0x01);
           int je_read_ok=put_jmp(0x0f,0x84);
-          E(0x41);E(0xba);E4(-1); /* r10d = -1 (EOF) */
+          E(0x41);E(0xba);E4(-1); 
           int jmp_after_in=put_jmp(0xe9,0);
           patch_jmp(je_read_ok,x_len);
-          E(0x44);E(0x0f);E(0xb6);E(0x54);E(0x24);E(0x08); /* movzx r10d, byte [rsp+8] */
+          E(0x44);E(0x0f);E(0xb6);E(0x54);E(0x24);E(0x08); 
           patch_jmp(jmp_after_in,x_len);
           int jmp_do_sub=put_jmp(0xe9,0);
-          
-          /* Normal Read A */
           patch_jmp(jne_skip_in,x_len);
-          E(0x47);E(0x8b);E(0x14);E(0x90); /* mov r10d,[r8+r10*4] */
+          E(0x47);E(0x8b);E(0x14);E(0x90); 
           patch_jmp(jmp_do_sub,x_len);
-          
-          /* OUT Logic */
-          E(0x41);E(0x81);E(0xfc);E4(9999); /* cmp r12d,9999 */
+          E(0x41);E(0x81);E(0xfc);E4(9999); 
           int jne_skip_out=put_jmp(0x0f,0x85);
-          E(0x31);E(0xc0); /* xor eax, eax */
-          E(0x44);E(0x29);E(0xd0); /* sub eax, r10d  <-- BUG FIXED HERE! */
-          E(0x88);E(0x44);E(0x24);E(0x08); /* mov [rsp+8],al */
-          E(0xb8);E4(1);E(0xbf);E4(1); /* sys_write */
+          E(0x44);E(0x89);E(0x54);E(0x24);E(0x08); 
+          E(0xb8);E4(1);E(0xbf);E4(1); 
           E(0x48);E(0x8d);E(0x74);E(0x24);E(0x08);
-          E(0xba);E4(1);E(0x0f);E(0x05);
-          E(0x45);E(0x31);E(0xf6);E(0x45);E(0x29);E(0xd6); /* r14d = 0 - r10d */
+          E(0xba);E4(4);E(0x0f);E(0x05); 
+          E(0x45);E(0x31);E(0xf6);E(0x45);E(0x29);E(0xd6); 
           int jmp_check_jmp=put_jmp(0xe9,0);
-          
-          /* Normal Sub B */
           patch_jmp(jne_skip_out,x_len);
-          E(0x47);E(0x8b);E(0x34);E(0xa0); /* mov r14d,[r8+r12*4] */
-          E(0x45);E(0x29);E(0xd6); /* sub r14d,r10d */
-          E(0x47);E(0x89);E(0x34);E(0xa0); /* mov [r8+r12*4],r14d */
+          E(0x47);E(0x8b);E(0x34);E(0xa0); 
+          E(0x45);E(0x29);E(0xd6); 
+          E(0x47);E(0x89);E(0x34);E(0xa0); 
           patch_jmp(jmp_check_jmp,x_len);
-          
-          /* Jump Eval */
-          E(0x41);E(0x83);E(0xfe);E(0x00); /* cmp r14d,0 */
+          E(0x41);E(0x83);E(0xfe);E(0x00); 
           int jg_next_inst=put_jmp(0x0f,0x8f);
-          E(0x4d);E(0x63);E(0xcd); /* movsxd r9,r13d */
+          E(0x4d);E(0x63);E(0xcd); 
           int jmp_loop_start1=put_jmp(0xe9,0);
           patch_jmp(jmp_loop_start1,loop_start);
           patch_jmp(jg_next_inst,x_len);
-          E(0x49);E(0x83);E(0xc1);E(0x03); /* add r9,3 */
+          E(0x49);E(0x83);E(0xc1);E(0x03); 
           int jmp_loop_start2=put_jmp(0xe9,0);
           patch_jmp(jmp_loop_start2,loop_start);
-          
-          /* Halt */
           int halt_pos=x_len;
           patch_jmp(jl_halt,halt_pos);
           patch_jmp(jge_halt,halt_pos);
           patch_jmp(je_halt_c,halt_pos);
-          E(0xb8);E4(60);E(0x31);E(0xff);E(0x0f);E(0x05); /* sys_exit(0) */
-          
+          E(0xb8);E4(60);E(0x31);E(0xff);E(0x0f);E(0x05); 
           uint32_t mem_offset=x_len-lea_pos;
           x86[lea_pos-4]=mem_offset&0xff;
           x86[lea_pos-3]=(mem_offset>>8)&0xff;
           x86[lea_pos-2]=(mem_offset>>16)&0xff;
           x86[lea_pos-1]=(mem_offset>>24)&0xff;}
-          
           int main(int argc,char**argv){
           if(argc<3)return 1;
           FILE*in=fopen(argv[1],"rb");if(!in)return 1;
@@ -131,51 +107,136 @@ jobs:
           0,0,0x40,0,0,0,0,0,0,0,0x40,0,0,0,0,0,
           0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
           0,0,0x20,0,0,0,0,0};
-          long fsz=120+x_len+sizeof(mem);
+          int pad=(x_len+3)&~3;
+          long fsz=120+pad+40000;
           memcpy(elf+96,&fsz,4);memcpy(elf+104,&fsz,4);
           FILE*out=fopen(argv[2],"wb");
-          fwrite(elf,1,120,out);fwrite(x86,1,x_len,out);fwrite(mem,1,sizeof(mem),out);
+          fwrite(elf,1,120,out);fwrite(x86,1,x_len,out);
+          unsigned char zero[4]={0};fwrite(zero,1,pad-x_len,out);
+          fwrite(mem,1,sizeof(mem),out);
           fclose(out);return 0;}
           EOF
-          gcc -O2 -Wall -o compiler.elf compiler.c
-
-      - name: 2. Forge Echo (.inc)
-        run: |
-          cat << 'EOF' > forge_echo.c
-          #include<stdio.h>
-          #include<stdint.h>
+          
+          cat compiler.c > forge_compiler.c
+          cat << 'EOF' >> forge_compiler.c
+          int32_t m[20000]={0}; int pc=0;
+          void S(int a,int b,int c){m[pc++]=a;m[pc++]=b;m[pc++]=c;}
+          void set0(int a){S(a,a,pc+3);}
+          void sub(int s,int d){S(s,d,pc+3);}
+          void add(int s,int d){set0(8001);sub(s,8001);sub(8001,d);set0(8001);}
+          void jmp2(int t){S(8000,8000,t);}
+          void write_A(int ptr,int tA){set0(tA);add(ptr,tA);}
+          
           int main(){
-          int32_t m[10000]={0};
-          m[0]=16;m[1]=16;m[2]=3;   /* T=0, jump 3 */
-          m[3]=9999;m[4]=16;m[5]=9; /* T=0-IN. If char(<=0) jump 9. If EOF(>0) next(6) */
-          m[6]=0;m[7]=0;m[8]=9999;  /* HALT */
-          m[9]=16;m[10]=9999;m[11]=12; /* OUT=0-T(char). jump 12 */
-          m[12]=15;m[13]=15;m[14]=0; /* Z=0, jump 0 */
-          FILE*f=fopen("echo.inc","wb");
-          for(int i=0;i<15;i++){
+          build_x86();
+          unsigned char elf[120]={
+          0x7f,0x45,0x4c,0x46,2,1,1,0,0,0,0,0,0,0,0,0,
+          2,0,0x3e,0,1,0,0,0,0x78,0,0x40,0,0,0,0,0,
+          0x40,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+          0,0,0,0,0x40,0,0x38,0,1,0,0,0,0,0,0,0,
+          1,0,0,0,7,0,0,0,0,0,0,0,0,0,0,0,
+          0,0,0x40,0,0,0,0,0,0,0,0x40,0,0,0,0,0,
+          0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+          0,0,0x20,0,0,0,0,0};
+          int pad=(x_len+3)&~3;
+          long fsz=120+pad+40000;
+          memcpy(elf+96,&fsz,4);memcpy(elf+104,&fsz,4);
+          
+          int d_ptr=1000;
+          for(int i=0;i<120;i+=4) m[d_ptr++]=*(uint32_t*)(elf+i);
+          for(int i=0;i<pad;i+=4) m[d_ptr++]=*(uint32_t*)(x86+i);
+          int end_ptr=d_ptr;
+          
+          m[8000]=0; m[8001]=0; m[8002]=0; m[8003]=0; m[8004]=0; m[8005]=10000;
+          m[8006]=1000; m[8007]=end_ptr; m[8010]=-1; m[8011]=-32; m[8012]=-9; m[8013]=32; m[8015]=20000;
+          
+          pc=0;
+          int l1=pc;
+          set0(8001);add(8006,8001);sub(8007,8001);
+          set0(8008);sub(8001,8008);
+          S(8000,8008,0); int p1_jmp=pc-1;
+          int t1=pc+15; write_A(8006,t1);
+          S(0,9999,pc+3);
+          sub(8010,8006);
+          jmp2(l1);
+          
+          m[p1_jmp]=pc;
+          int l2=pc;
+          set0(8002);S(9999,8002,pc+3);
+          S(8002,8000,0); int peof=pc-1;
+          set0(8000);
+          set0(8001);add(8002,8001);sub(8011,8001);
+          S(8000,8001,0); int pspace=pc-1;
+          add(8003,8003);sub(8010,8003);sub(8010,8004);
+          jmp2(pc+9);
+          m[pspace]=pc;
+          add(8003,8003);sub(8010,8004);
+          set0(8001);add(8004,8001);sub(8013,8001);
+          set0(8008);sub(8001,8008);
+          S(8000,8008,0); int pflush=pc-1;
+          jmp2(l2);
+          
+          m[pflush]=pc;
+          int tA=pc+30; int tB=pc+31;
+          write_A(8005,tA); write_A(8005,tB);
+          S(0,0,pc+3);
+          set0(8001);sub(8003,8001);
+          int tB2=pc+16; write_A(8005,tB2);
+          S(8001,0,pc+3);
+          sub(8010,8005);
+          set0(8003);set0(8004);
+          jmp2(l2);
+          
+          m[peof]=pc;
+          set0(8000); m[8006]=10000;
+          int l3=pc;
+          set0(8001);add(8006,8001);sub(8015,8001);
+          set0(8008);sub(8001,8008);
+          S(8000,8008,0); int phalt=pc-1;
+          int t3=pc+15; write_A(8006,t3);
+          S(0,9999,pc+3);
+          sub(8010,8006);
+          jmp2(l3);
+          
+          m[phalt]=pc;
+          S(0,0,9999);
+          
+          FILE*f=fopen("compiler.inc","wb");
+          for(int i=0;i<20000;i++){
           for(int b=31;b>=0;b--){
           if((m[i]>>b)&1)fputc('\t',f);else fputc(' ',f);
           }
           }
           fclose(f);return 0;}
           EOF
-          gcc -O2 -Wall -o forge_echo.elf forge_echo.c
-          ./forge_echo.elf
+          gcc -O2 -Wall -o compiler.elf compiler.c
+          gcc -O2 -Wall -o forge_compiler.elf forge_compiler.c
 
-      - name: 3. Compile Echo (.inc -> .elf)
-        run: |
-          ./compiler.elf echo.inc echo.elf
-          chmod +x echo.elf
+      - name: 2. Forge True Subleq Compiler (.inc)
+        run: ./forge_compiler.elf
 
-      - name: 4. Test Native Echo
+      - name: 3. Stage 1 (C Compiler -> compiler1.elf)
         run: |
-          echo -n "HELLO NATIVE WORLD" > input.txt
-          ./echo.elf < input.txt > output.txt
-          cat output.txt
-          echo ""
-          if grep -q "HELLO NATIVE WORLD" output.txt; then
-            echo "✅ Native I/O Engine Successfully Built and Executed!"
+          ./compiler.elf compiler.inc compiler1.elf
+          chmod +x compiler1.elf
+
+      - name: 4. Stage 2 (Subleq Compiler -> compiler2.elf)
+        run: |
+          ./compiler1.elf < compiler.inc > compiler2.elf
+          chmod +x compiler2.elf
+
+      - name: 5. Stage 3 (Subleq Compiler -> compiler3.elf)
+        run: |
+          ./compiler2.elf < compiler.inc > compiler3.elf
+          chmod +x compiler3.elf
+
+      - name: 6. Verify Absolute Fixed Point
+        run: |
+          sha256sum compiler1.elf compiler2.elf compiler3.elf
+          if [ "$(sha256sum compiler1.elf | cut -d' ' -f1)" = "$(sha256sum compiler2.elf | cut -d' ' -f1)" ] && \
+             [ "$(sha256sum compiler2.elf | cut -d' ' -f1)" = "$(sha256sum compiler3.elf | cut -d' ' -f1)" ]; then
+            echo "✅ ABSOLUTE FIXED POINT ACHIEVED!"
           else
-            echo "❌ Native Execution Failed."
+            echo "❌ Fixed Point Failed."
             exit 1
           fi
