@@ -1,0 +1,35 @@
+name: Inceptionut Self-Host Bootstrap
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+
+jobs:
+  bootstrap:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build bootstrap compiler (C)
+        run: gcc -O2 -Wall -o compiler.elf compiler.c
+
+      - name: Stage 1 - compiler.inc → compiler1.elf
+        run: ./compiler.elf compiler.inc compiler1.elf
+
+      - name: Stage 2 - compiler.inc → compiler2.elf
+        run: ./compiler1.elf compiler.inc compiler2.elf
+
+      - name: Stage 3 - compiler.inc → compiler3.elf
+        run: ./compiler2.elf compiler.inc compiler3.elf
+
+      - name: Fixed-point verification (SHA-256)
+        run: |
+          sha256sum compiler.elf compiler2.elf compiler3.elf
+          if [ "$(sha256sum compiler.elf | cut -d' ' -f1)" = "$(sha256sum compiler2.elf | cut -d' ' -f1)" ] && \
+             [ "$(sha256sum compiler2.elf | cut -d' ' -f1)" = "$(sha256sum compiler3.elf | cut -d' ' -f1)" ]; then
+            echo "✅ FIXED POINT ACHIEVED! compiler.elf == compiler2.elf == compiler3.elf"
+          else
+            echo "❌ Fixed point failed"
+            exit 1
+          fi
