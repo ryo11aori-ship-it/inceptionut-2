@@ -330,20 +330,21 @@ jobs:
 
     - name: 8. THEOREM 5 - Absolute Environment Non-Interference
       run: |
-        WORK_DIR=$(pwd)
-        faketime '2026-01-01' bwrap \
-        --unshare-all --unshare-user --unshare-pid --unshare-net --unshare-ipc --unshare-uts \
-        --ro-bind / / --dev /dev --proc /proc --tmpfs /tmp \
-        --bind $WORK_DIR $WORK_DIR --chdir $WORK_DIR \
-        ./compiler_final.elf < compiler.inc > compiler_pure.elf
-        H_BASE=$(sha256sum compiler_final.elf | awk '{print $1}')
-        H_PURE=$(sha256sum compiler_pure.elf | awk '{print $1}')
-        if [ "$H_BASE" == "$H_PURE" ]; then
-          echo "✅ Theorem 5 Proved - Environmental Invariance strictly isolated."
-        else
-          echo "❌ Purity Failed"
-          exit 1
-        fi
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y bubblewrap
+          WORK_DIR=$(pwd)
+          faketime '2026-01-01' bwrap \
+          --unshare-all --unshare-user --unshare-pid --unshare-net --unshare-ipc --unshare-uts \
+          --ro-bind / / --dev /dev --proc /proc --tmpfs /tmp \
+          --bind $WORK_DIR $WORK_DIR --chdir $WORK_DIR \
+          ./compiler_final.elf < compiler.inc > compiler_pure.elf
+          H_BASE=$(sha256sum compiler_final.elf | awk '{print $1}')
+          H_PURE=$(sha256sum compiler_pure.elf | awk '{print $1}')
+          if [ "$H_BASE" == "$H_PURE" ]; then
+            echo "✅ Theorem 5 Proved - Environmental Invariance strictly isolated."
+          else
+            echo "❌ Purity Failed"
+            exit 1
+          fi
 
     - name: 9. Strict Syscall Audit & Static W^X Inspection
       run: |
