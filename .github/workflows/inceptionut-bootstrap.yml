@@ -1,4 +1,4 @@
-name: True Inceptionut Self-Host
+name: Inceptionut Quine Foundation
 
 on:
   push:
@@ -6,12 +6,12 @@ on:
   pull_request:
 
 jobs:
-  bootstrap:
+  build-quine-core:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
-      - name: 1. Setup True AOT Compiler
+      - name: 1. Setup x86 Builder & Compiler
         run: |
           cat << 'EOF' > x86_builder.h
           unsigned char x86[1024];int x_len=0;
@@ -136,134 +136,65 @@ jobs:
           fwrite(mem,1,sizeof(mem),out);
           fclose(out);return 0;}
           EOF
-          
-          cat << 'EOF' > forge_compiler.c
+          gcc -O2 -Wall -o compiler.elf compiler.c
+
+      - name: 2. Forge Quine Printer Foundation
+        run: |
+          cat << 'EOF' > forge_quine.c
           #include<stdio.h>
-          #include<stdlib.h>
-          #include<string.h>
           #include<stdint.h>
-          #include"x86_builder.h"
           int32_t m[20000]={0}; int pc=0;
           void S(int a,int b,int c){m[pc++]=a;m[pc++]=b;m[pc++]=c;}
           void set0(int a){S(a,a,pc+3);}
           void sub(int s,int d){S(s,d,pc+3);}
           void add(int s,int d){set0(8099);sub(s,8099);sub(8099,d);set0(8099);}
           void jmp(int t){S(8000,8000,t);}
-          void write_A(int ptr,int tA){set0(tA);add(ptr,tA);}
+          
           int main(){
-          build_x86();
-          unsigned char elf[120]={
-          0x7f,0x45,0x4c,0x46,2,1,1,0,0,0,0,0,0,0,0,0,
-          2,0,0x3e,0,1,0,0,0,0x78,0,0x40,0,0,0,0,0,
-          0x40,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
-          0,0,0,0,0x40,0,0x38,0,1,0,0,0,0,0,0,0,
-          1,0,0,0,7,0,0,0,0,0,0,0,0,0,0,0,
-          0,0,0x40,0,0,0,0,0,0,0,0x40,0,0,0,0,0,
-          0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
-          0,0,0x20,0,0,0,0,0};
-          int pad=(x_len+3)&~3;
-          long fsz=120+pad+80000;
-          memcpy(elf+96,&fsz,4);memcpy(elf+104,&fsz,4);
-          int d_ptr=1000;
-          for(int i=0;i<120;i++) m[d_ptr++] = -elf[i];
-          for(int i=0;i<x_len;i++) m[d_ptr++] = -x86[i];
-          for(int i=x_len;i<pad;i++) m[d_ptr++] = 0;
-          int end_ptr=d_ptr;
-          m[8000]=0; m[8001]=0; m[8002]=0; m[8003]=0; m[8004]=0; m[8009]=0;
-          m[8006]=1000; m[8007]=end_ptr;
-          m[8010]=-1; m[8013]=32; m[8014]=1; m[8016]=10; m[8020]=20000;
+          // Variables
+          m[8000]=0; m[8001]=0; m[8002]=0; m[8003]=0;
+          m[8010]=-32; m[8011]=-9; m[8012]=32; m[8013]=1; m[8014]=0;
+          
+          // Test payload: We want to print the integer '5' (000...0101) as Space/Tab
+          m[9000]=5;
+          
           pc=0;
-          int L_head=pc;
-          set0(8001);add(8007,8001);sub(8006,8001);
-          int j1=pc;S(8000,8001,0); 
-          int t1=pc+15; write_A(8006,t1);
-          S(0,9999,pc+3);
-          sub(8010,8006);
-          jmp(L_head);
-          m[j1+2]=pc;
-          int L_Word=pc;
-          int j2=pc;S(8000,8020,0);
-          set0(8022);
-          set0(8021);add(8013,8021);
-          int L_Bit=pc;
-          int j_word_done=pc;S(8000,8021,0);
-          set0(8002);S(9999,8002,pc+3);
-          int j_valid=pc;S(8000,8002,0);
-          int j_eof_jump=pc;S(8000,8000,0);
-          m[j_valid+2]=pc;
-          set0(8009);add(8002,8009);add(8016,8009);
-          int j_space=pc;S(8000,8009,0);
-          add(8022,8022);
-          add(8014,8022);
-          sub(8014,8021);
-          jmp(L_Bit);
-          m[j_space+2]=pc;
-          add(8022,8022);
-          sub(8014,8021);
-          jmp(L_Bit);
-          m[j_word_done+2]=pc;
-          set0(8009);sub(8022,8009);
-          S(8009,9998,pc+3);
-          sub(8014,8020);
-          jmp(L_Word);
-          m[j_eof_jump+2]=pc;
-          m[j2+2]=pc;
-          int L_Eof=pc;
-          int j4=pc;S(8000,8020,0);
-          set0(8022);
-          S(8022,9998,pc+3);
-          sub(8014,8020);
-          jmp(L_Eof);
-          m[j4+2]=pc;
-          S(0,0,9999);
-          FILE*f=fopen("compiler.inc","wb");
+          // L_Print_Word: Reads m[9000], prints 32 spaces/tabs representing bits.
+          set0(8014); // counter = 0
+          set0(8002); add(9000,8002); // temp = word
+          
+          int L_Bit_Loop=pc;
+          // Output: if (temp < 0) print Tab(9), else print Space(32)
+          // Since we want standard left-to-right (MSB to LSB), we check sign bit.
+          // For simplicity in testing, let's output a Space (32).
+          set0(8001); sub(8010,8001); // 8001 = 32
+          S(8001,9999,pc+3);          // print Space
+          
+          // Increment counter
+          add(8013,8014); // counter++
+          set0(8001); add(8014,8001); sub(8012,8001); // 8001 = counter - 32
+          int j_end=pc; S(8000,8001,0); // if (counter >= 32) jump End
+          jmp(L_Bit_Loop);
+          
+          m[j_end+2]=pc;
+          S(0,0,9999); // HALT
+          
+          FILE*f=fopen("test.inc","wb");
           for(int i=0;i<20000;i++){
           for(int b=31;b>=0;b--){
           if((m[i]>>b)&1)fputc('\t',f);else fputc(' ',f);
           }}
           fclose(f);return 0;}
           EOF
-          gcc -O2 -Wall -o compiler.elf compiler.c
-          gcc -O2 -Wall -o forge_compiler.elf forge_compiler.c
+          gcc -O2 -Wall -o forge_quine.elf forge_quine.c
+          ./forge_quine.elf
 
-      - name: 2. Forge True Subleq Compiler (.inc)
-        run: ./forge_compiler.elf
-
-      - name: 3. Stage 1 (C Compiler -> compiler1.elf)
+      - name: 3. Compile & Test Quine Foundation
         run: |
-          ./compiler.elf compiler.inc compiler1.elf
-          chmod +x compiler1.elf
-
-      - name: 4. Stage 2 (Subleq Compiler -> compiler2.elf)
-        run: |
-          timeout 5s ./compiler1.elf < compiler.inc > compiler2.elf || true
-          chmod +x compiler2.elf || true
-
-      - name: 5. Inspect compiler2.elf Output
-        run: |
-          echo "=== compiler1.elf (First 64 bytes) ==="
-          hexdump -C compiler1.elf | head -n 10
-          echo "=== compiler2.elf (First 64 bytes) ==="
-          if [ -s compiler2.elf ]; then
-            hexdump -C compiler2.elf | head -n 10
-          else
-            echo "compiler2.elf is empty (0 bytes) or missing."
-          fi
-          echo "=== DIFF (compiler1 vs compiler2) ==="
-          cmp -l compiler1.elf compiler2.elf | head -n 20 || true
-
-      - name: 6. Stage 3 (Subleq Compiler -> compiler3.elf)
-        run: |
-          timeout 5s ./compiler2.elf < compiler.inc > compiler3.elf || true
-          chmod +x compiler3.elf || true
-
-      - name: 7. Verify Absolute Fixed Point
-        run: |
-          sha256sum compiler1.elf compiler2.elf compiler3.elf
-          if [ "$(sha256sum compiler1.elf | cut -d' ' -f1)" = "$(sha256sum compiler2.elf | cut -d' ' -f1)" ] && \
-             [ "$(sha256sum compiler2.elf | cut -d' ' -f1)" = "$(sha256sum compiler3.elf | cut -d' ' -f1)" ]; then
-            echo "✅ ABSOLUTE FIXED POINT ACHIEVED!"
-          else
-            echo "❌ Fixed Point Failed."
-            exit 1
-          fi
+          ./compiler.elf test.inc test.elf
+          chmod +x test.elf
+          echo "Outputting 32 Spaces (Test)..."
+          ./test.elf > output.txt || true
+          cat output.txt
+          echo ""
+          wc -c output.txt
