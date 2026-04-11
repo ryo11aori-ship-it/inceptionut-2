@@ -146,38 +146,44 @@ jobs:
           int32_t m[20000]={0}; int pc=0;
           void S(int a,int b,int c){m[pc++]=a;m[pc++]=b;m[pc++]=c;}
           void set0(int a){S(a,a,pc+3);}
-          void sub(int s,int d){S(s,d,pc+3);}
-          void add(int s,int d){set0(8099);sub(s,8099);sub(8099,d);set0(8099);}
-          void jmp(int t){S(8000,8000,t);}
           
           int main(){
-          // Variables
-          m[8000]=0; m[8001]=0; m[8002]=0; m[8003]=0;
-          m[8010]=-32; m[8011]=-9; m[8012]=32; m[8013]=1; m[8014]=0;
+          m[8000]=0; m[8001]=0;
+          m[8010]=-32; m[8011]=-9; m[8013]=1; m[8014]=32;
           
-          // Test payload: We want to print the integer '5' (000...0101) as Space/Tab
-          m[9000]=5;
+          // Test payload: 0xF0F0F0F0 (1111 0000 1111 0000 ...)
+          // Should print exactly 32 characters: 4 Tabs, 4 Spaces, 4 Tabs...
+          m[9000]=0xF0F0F0F0;
           
           pc=0;
-          // L_Print_Word: Reads m[9000], prints 32 spaces/tabs representing bits.
-          set0(8014); // counter = 0
-          set0(8002); add(9000,8002); // temp = word
+          int L_Bit_Loop = pc;
           
-          int L_Bit_Loop=pc;
-          // Output: if (temp < 0) print Tab(9), else print Space(32)
-          // Since we want standard left-to-right (MSB to LSB), we check sign bit.
-          // For simplicity in testing, let's output a Space (32).
-          set0(8001); sub(8010,8001); // 8001 = 32
-          S(8001,9999,pc+3);          // print Space
+          // 1. Check if top bit is 1 (negative) or 0 (positive/zero)
+          // temp = 0 - m[9000]. If m[9000] is positive or zero, temp <= 0 and it jumps.
+          set0(8001);
+          int j_pos_or_zero = pc; S(9000, 8001, 0);
           
-          // Increment counter
-          add(8013,8014); // counter++
-          set0(8001); add(8014,8001); sub(8012,8001); // 8001 = counter - 32
-          int j_end=pc; S(8000,8001,0); // if (counter >= 32) jump End
-          jmp(L_Bit_Loop);
+          // --- Top bit is 1 (Negative) ---
+          S(8011, 9999, pc+3); // Print Tab (-9)
+          int j_shift = pc; S(8000, 8000, 0); // Jump to shift
           
-          m[j_end+2]=pc;
-          S(0,0,9999); // HALT
+          // --- Top bit is 0 (Positive or Zero) ---
+          m[j_pos_or_zero+2] = pc;
+          S(8010, 9999, pc+3); // Print Space (-32)
+          
+          // 2. Shift left (m[9000] = m[9000] * 2)
+          m[j_shift+2] = pc;
+          set0(8001);
+          S(9000, 8001, pc+3); // 8001 = -m[9000]
+          S(8001, 9000, pc+3); // 9000 = m[9000] - (-m[9000]) = 2 * m[9000]
+          
+          // 3. Decrement counter and loop
+          int j_end = pc; S(8013, 8014, 0); // counter -= 1. If <= 0, jump End
+          S(8000, 8000, L_Bit_Loop);
+          
+          // 4. Halt
+          m[j_end+2] = pc;
+          S(8000, 8000, 9999);
           
           FILE*f=fopen("test.inc","wb");
           for(int i=0;i<20000;i++){
@@ -193,8 +199,8 @@ jobs:
         run: |
           ./compiler.elf test.inc test.elf
           chmod +x test.elf
-          echo "Outputting 32 Spaces (Test)..."
+          echo "Outputting 32 Characters (Test)..."
           ./test.elf > output.txt || true
-          cat output.txt
+          hexdump -C output.txt
           echo ""
           wc -c output.txt
