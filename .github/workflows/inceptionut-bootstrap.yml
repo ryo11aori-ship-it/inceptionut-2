@@ -525,17 +525,3 @@ jobs:
           *.elf
           strace.log
           elf_headers.txt
-
-
-    - name: 13. Extract Omni-Level Artifacts
-      if: always()
-      uses: actions/upload-artifact@v4
-      with:
-        name: inceptionut-omni-artifacts
-        path: |
-          *.c
-          *.h
-          *.inc
-          *.elf
-          strace.log
-          elf_headers.txt
