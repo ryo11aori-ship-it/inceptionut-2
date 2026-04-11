@@ -1,4 +1,4 @@
-name: Inceptionut Quine Foundation
+name: Inceptionut Absolute Quine
 
 on:
   push:
@@ -6,7 +6,7 @@ on:
   pull_request:
 
 jobs:
-  build-quine-core:
+  build-quine:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -138,7 +138,7 @@ jobs:
           EOF
           gcc -O2 -Wall -o compiler.elf compiler.c
 
-      - name: 2. Forge Quine Printer Foundation
+      - name: 2. Forge Absolute Quine (.inc)
         run: |
           cat << 'EOF' > forge_quine.c
           #include<stdio.h>
@@ -151,35 +151,78 @@ jobs:
           void jmp(int t){S(8000,8000,t);}
           
           int main(){
-          m[8000]=0; m[8010]=-32; m[8011]=-9; m[8013]=1; m[8014]=32; m[8015]=-1;
-          m[9000]=0xF0F0F0F0;
+          int V_ZERO=8000; int V_T1=10001; int V_T2=10002; int V_T3=10003;
+          int V_I=10004; int V_TEMP=10005; int V_BIT=10006;
+          int C_20000=100; int C_CODE_LEN=101; int C_A1=102;
+          int C_M32=103; int C_M9=104; int C_32=105;
+          int C_1=106; int C_M1=107; int C_V_ZERO_ADDR=108;
+          int Read1_PC=0; int Read2_PC=0; int CODE_LEN=0;
           
-          pc=0;
-          int L_Bit_Loop = pc;
+          for(int pass=0; pass<2; pass++){
+          pc=200;
+          set0(V_I);
+          int L_Word=pc;
+          set0(V_T1); add(C_20000, V_T1); sub(V_I, V_T1);
+          int j_halt=pc; S(V_ZERO, V_T1, 0);
+          set0(V_T1); add(C_CODE_LEN, V_T1); sub(V_I, V_T1);
+          int j_pad=pc; S(V_ZERO, V_T1, 0);
+          set0(V_T1); add(V_I, V_T1); sub(C_A1, V_T1);
+          int j_le=pc; S(V_ZERO, V_T1, 0);
+          int j_use_read1=pc; jmp(0);
           
-          set0(8001);
-          add(9000, 8001);
-          sub(8015, 8001);
-          int j_neg = pc; S(8000, 8001, 0);
+          m[j_le+2]=pc;
+          set0(V_T3); sub(V_T1, V_T3);
+          int j_eq=pc; S(V_ZERO, V_T3, 0);
+          jmp(j_use_read1);
           
-          S(8010, 9999, pc+3);
-          int j_shift = pc; S(8000, 8000, 0);
+          m[j_eq+2]=pc;
+          set0(Read2_PC); add(V_I, Read2_PC);
+          set0(V_TEMP);
+          Read2_PC=pc; S(V_ZERO, V_TEMP, pc+3);
+          set0(V_T1); sub(V_TEMP, V_T1); set0(V_TEMP); add(V_T1, V_TEMP);
+          set0(Read2_PC); add(C_V_ZERO_ADDR, Read2_PC);
+          int j_to_print1=pc; jmp(0);
           
-          m[j_neg+2] = pc;
-          S(8011, 9999, pc+3);
+          m[j_use_read1+2]=pc;
+          set0(Read1_PC); add(V_I, Read1_PC);
+          set0(V_TEMP);
+          Read1_PC=pc; S(V_ZERO, V_TEMP, pc+3);
+          set0(V_T1); sub(V_TEMP, V_T1); set0(V_TEMP); add(V_T1, V_TEMP);
+          set0(Read1_PC); add(C_V_ZERO_ADDR, Read1_PC);
           
-          m[j_shift+2] = pc;
-          set0(8001);
-          S(9000, 8001, pc+3);
-          S(8001, 9000, pc+3);
+          m[j_pad+2]=pc;
+          set0(V_TEMP);
+          m[j_to_print1+2]=pc;
           
-          int j_end = pc; S(8013, 8014, 0);
-          jmp(L_Bit_Loop);
+          set0(V_BIT); add(C_32, V_BIT);
+          int L_Bit=pc;
+          set0(V_T1); add(V_TEMP, V_T1); sub(C_M1, V_T1);
+          int j_strictly_neg=pc; S(V_ZERO, V_T1, 0);
+          S(C_M32, 9999, pc+3);
+          int j_shift=pc; jmp(0);
+          m[j_strictly_neg+2]=pc;
+          S(C_M9, 9999, pc+3);
           
-          m[j_end+2] = pc;
-          S(0,0,9999);
+          m[j_shift+2]=pc;
+          set0(V_T1); sub(V_TEMP, V_T1); sub(V_T1, V_TEMP);
+          sub(C_1, V_BIT);
+          int j_bit_loop=pc; S(V_ZERO, V_BIT, 0);
+          jmp(L_Bit);
           
-          FILE*f=fopen("test.inc","wb");
+          m[j_bit_loop+2]=pc;
+          add(C_1, V_I);
+          jmp(L_Word);
+          
+          m[j_halt+2]=pc;
+          S(V_ZERO, V_ZERO, 9999);
+          CODE_LEN=pc;
+          }
+          
+          m[V_ZERO]=0; m[C_20000]=20000; m[C_M32]=-32; m[C_M9]=-9;
+          m[C_32]=32; m[C_1]=1; m[C_M1]=-1; m[C_V_ZERO_ADDR]=8000;
+          m[C_CODE_LEN]=CODE_LEN; m[C_A1]=Read1_PC;
+          
+          FILE*f=fopen("quine.inc","wb");
           for(int i=0;i<20000;i++){
           for(int b=31;b>=0;b--){
           if((m[i]>>b)&1)fputc('\t',f);else fputc(' ',f);
@@ -189,12 +232,20 @@ jobs:
           gcc -O2 -Wall -o forge_quine.elf forge_quine.c
           ./forge_quine.elf
 
-      - name: 3. Compile & Test Quine Foundation
+      - name: 3. Compile & Execute Quine
         run: |
-          ./compiler.elf test.inc test.elf
-          chmod +x test.elf
-          echo "Outputting 32 Characters (Test)..."
-          ./test.elf > output.txt || true
-          hexdump -C output.txt
-          echo ""
-          wc -c output.txt
+          ./compiler.elf quine.inc quine.elf
+          chmod +x quine.elf
+          echo "Executing Quine. Stand back..."
+          timeout 5s ./quine.elf > output.inc || true
+
+      - name: 4. Verify Absolute Quine (Source Fixed Point)
+        run: |
+          echo "Comparing original source vs generated source..."
+          cmp -l quine.inc output.inc || true
+          if cmp -s quine.inc output.inc; then
+            echo "✅ ABSOLUTE QUINE ACHIEVED! (C(P) = P)"
+          else
+            echo "❌ Quine Failed."
+            exit 1
+          fi
