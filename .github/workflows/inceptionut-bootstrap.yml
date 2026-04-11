@@ -155,17 +155,35 @@ jobs:
           int V_I=10004; int V_TEMP=10005; int V_BIT=10006;
           int C_20000=100; int C_CODE_LEN=101; int C_A1=102;
           int C_M32=103; int C_M9=104; int C_32=105;
-          int C_1=106; int C_M1=107; int C_V_ZERO_ADDR=108;
+          int C_1=106; int C_M1=107; int C_V_ZERO_ADDR=108; int C_9999=109;
           int Read1_PC=0; int Read2_PC=0; int CODE_LEN=0;
           
           for(int pass=0; pass<2; pass++){
+          pc=0;
+          jmp(200);
           pc=200;
           set0(V_I);
           int L_Word=pc;
           set0(V_T1); add(C_20000, V_T1); sub(V_I, V_T1);
           int j_halt=pc; S(V_ZERO, V_T1, 0);
+          
+          set0(V_T1); add(V_I, V_T1); sub(C_9999, V_T1);
+          int j_chk=pc; S(V_ZERO, V_T1, 0);
+          int j_not_9999=pc; jmp(0);
+          
+          m[j_chk+2]=pc;
+          set0(V_T3); sub(V_T1, V_T3);
+          int j_is_9999=pc; S(V_ZERO, V_T3, 0);
+          jmp(j_not_9999);
+          
+          m[j_is_9999+2]=pc;
+          set0(V_TEMP);
+          int j_after_read=pc; jmp(0);
+          
+          m[j_not_9999+2]=pc;
           set0(V_T1); add(C_CODE_LEN, V_T1); sub(V_I, V_T1);
           int j_pad=pc; S(V_ZERO, V_T1, 0);
+          
           set0(V_T1); add(V_I, V_T1); sub(C_A1, V_T1);
           int j_le=pc; S(V_ZERO, V_T1, 0);
           int j_use_read1=pc; jmp(0);
@@ -189,10 +207,14 @@ jobs:
           Read1_PC=pc; S(V_ZERO, V_TEMP, pc+3);
           set0(V_T1); sub(V_TEMP, V_T1); set0(V_TEMP); add(V_T1, V_TEMP);
           set0(Read1_PC); add(C_V_ZERO_ADDR, Read1_PC);
+          int j_to_print2=pc; jmp(0);
           
           m[j_pad+2]=pc;
           set0(V_TEMP);
+          
           m[j_to_print1+2]=pc;
+          m[j_to_print2+2]=pc;
+          m[j_after_read+2]=pc;
           
           set0(V_BIT); add(C_32, V_BIT);
           int L_Bit=pc;
@@ -220,6 +242,7 @@ jobs:
           
           m[V_ZERO]=0; m[C_20000]=20000; m[C_M32]=-32; m[C_M9]=-9;
           m[C_32]=32; m[C_1]=1; m[C_M1]=-1; m[C_V_ZERO_ADDR]=8000;
+          m[C_9999]=9999;
           m[C_CODE_LEN]=CODE_LEN; m[C_A1]=Read1_PC;
           
           FILE*f=fopen("quine.inc","wb");
