@@ -458,7 +458,76 @@ jobs:
         EOF
         python3 fuzzer.py
 
-    - name: 11. Extract Omni-Level Artifacts
+    - name: 11. Forge Universal Compiler (Dynamic Native ELF Generator)
+      run: |
+        cat << 'EOF' > universal_compiler.c
+        #include<stdio.h>
+        #include<stdlib.h>
+        #include<string.h>
+        #include<stdint.h>
+        #include"x86_builder.h"
+        int main(int argc,char**argv){
+        if(argc<3){printf("Usage: %s <input.inc> <output.elf>\n",argv[0]);return 1;}
+        FILE*in=fopen(argv[1],"rb");if(!in)return 1;
+        fseek(in,0,SEEK_END);long sz=ftell(in);rewind(in);
+        int32_t* mem=calloc(20000,sizeof(int32_t));long bit=0;
+        for(long i=0;i<sz;i++){
+        int ch=fgetc(in);
+        if(ch==' ')bit++;
+        else if(ch=='\t'){mem[(bit/32)%20000]|=(1U<<(31-(bit%32)));bit++;}
+        }
+        fclose(in);
+        int max_idx=0;
+        for(int i=0;i<20000;i++){if(mem[i]!=0)max_idx=i;}
+        long actual_mem_size=(max_idx+1)*4;
+        if(actual_mem_size<4096)actual_mem_size=4096;
+        build_x86();
+        unsigned char elf[176]={
+        0x7f,0x45,0x4c,0x46,2,1,1,0,0,0,0,0,0,0,0,0,
+        2,0,0x3e,0,1,0,0,0,0xb0,0,0x40,0,0,0,0,0,
+        0x40,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+        0,0,0,0,0x40,0,0x38,0,2,0,0,0,0,0,0,0,
+        1,0,0,0,5,0,0,0,0,0,0,0,0,0,0,0,
+        0,0,0x40,0,0,0,0,0,0,0,0x40,0,0,0,0,0,
+        0,0x10,0,0,0,0,0,0,0,0x10,0,0,0,0,0,0,
+        0,0x10,0,0,0,0,0,0,
+        1,0,0,0,6,0,0,0,0,0x10,0,0,0,0,0,0,
+        0,0x10,0x40,0,0,0,0,0,0,0x10,0x40,0,0,0,0,0,
+        0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+        0,0x10,0,0,0,0,0,0
+        };
+        int pad=4096-176-x_len;
+        long total_file_size=176+x_len+pad+actual_mem_size;
+        memcpy(elf+152,&actual_mem_size,4);
+        memcpy(elf+160,&actual_mem_size,4);
+        FILE*out=fopen(argv[2],"wb");
+        fwrite(elf,1,176,out);
+        fwrite(x86,1,x_len,out);
+        unsigned char* zero=calloc(1,pad);
+        fwrite(zero,1,pad,out);
+        fwrite(mem,1,actual_mem_size,out);
+        free(zero);free(mem);
+        fclose(out);
+        return 0;}
+        EOF
+        gcc -O2 -Wall -o universal_compiler.elf universal_compiler.c
+        echo "✅ Universal Compiler (Dynamic ELF Generator) Successfully Forged."
+
+    - name: 12. Extract Omni-Level Artifacts
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: inceptionut-omni-artifacts
+        path: |
+          *.c
+          *.h
+          *.inc
+          *.elf
+          strace.log
+          elf_headers.txt
+
+
+    - name: 13. Extract Omni-Level Artifacts
       if: always()
       uses: actions/upload-artifact@v4
       with:
