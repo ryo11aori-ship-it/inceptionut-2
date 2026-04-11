@@ -328,8 +328,8 @@ jobs:
           exit 1
         fi
 
-      - name: 8. THEOREM 5 - Absolute Environment Non-Interference
-        run: |
+    - name: 8. THEOREM 5 - Absolute Environment Non-Interference
+      run: |
           sudo DEBIAN_FRONTEND=noninteractive apt-get install -y bubblewrap
           sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 || true
           WORK_DIR=$(pwd)
