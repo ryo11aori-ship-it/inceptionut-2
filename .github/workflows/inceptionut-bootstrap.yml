@@ -146,44 +146,38 @@ jobs:
           int32_t m[20000]={0}; int pc=0;
           void S(int a,int b,int c){m[pc++]=a;m[pc++]=b;m[pc++]=c;}
           void set0(int a){S(a,a,pc+3);}
+          void sub(int s,int d){S(s,d,pc+3);}
+          void add(int s,int d){set0(8099);sub(s,8099);sub(8099,d);set0(8099);}
+          void jmp(int t){S(8000,8000,t);}
           
           int main(){
-          m[8000]=0; m[8001]=0;
-          m[8010]=-32; m[8011]=-9; m[8013]=1; m[8014]=32;
-          
-          // Test payload: 0xF0F0F0F0 (1111 0000 1111 0000 ...)
-          // Should print exactly 32 characters: 4 Tabs, 4 Spaces, 4 Tabs...
+          m[8000]=0; m[8010]=-32; m[8011]=-9; m[8013]=1; m[8014]=32; m[8015]=-1;
           m[9000]=0xF0F0F0F0;
           
           pc=0;
           int L_Bit_Loop = pc;
           
-          // 1. Check if top bit is 1 (negative) or 0 (positive/zero)
-          // temp = 0 - m[9000]. If m[9000] is positive or zero, temp <= 0 and it jumps.
           set0(8001);
-          int j_pos_or_zero = pc; S(9000, 8001, 0);
+          add(9000, 8001);
+          sub(8015, 8001);
+          int j_neg = pc; S(8000, 8001, 0);
           
-          // --- Top bit is 1 (Negative) ---
-          S(8011, 9999, pc+3); // Print Tab (-9)
-          int j_shift = pc; S(8000, 8000, 0); // Jump to shift
+          S(8010, 9999, pc+3);
+          int j_shift = pc; S(8000, 8000, 0);
           
-          // --- Top bit is 0 (Positive or Zero) ---
-          m[j_pos_or_zero+2] = pc;
-          S(8010, 9999, pc+3); // Print Space (-32)
+          m[j_neg+2] = pc;
+          S(8011, 9999, pc+3);
           
-          // 2. Shift left (m[9000] = m[9000] * 2)
           m[j_shift+2] = pc;
           set0(8001);
-          S(9000, 8001, pc+3); // 8001 = -m[9000]
-          S(8001, 9000, pc+3); // 9000 = m[9000] - (-m[9000]) = 2 * m[9000]
+          S(9000, 8001, pc+3);
+          S(8001, 9000, pc+3);
           
-          // 3. Decrement counter and loop
-          int j_end = pc; S(8013, 8014, 0); // counter -= 1. If <= 0, jump End
-          S(8000, 8000, L_Bit_Loop);
+          int j_end = pc; S(8013, 8014, 0);
+          jmp(L_Bit_Loop);
           
-          // 4. Halt
           m[j_end+2] = pc;
-          S(8000, 8000, 9999);
+          S(0,0,9999);
           
           FILE*f=fopen("test.inc","wb");
           for(int i=0;i<20000;i++){
