@@ -11,13 +11,142 @@ jobs:
     steps:
     - uses: actions/checkout@v4
 
-    - name: 1. Equip Omni-Level Theorem Proving Arsenal
+    - name: 1. Setup x86 Builder & Compiler
       run: |
-        sudo dpkg --add-architecture i386
-        sudo apt-get update
-        sudo DEBIAN_FRONTEND=noninteractive apt-get install -y qemu-system-x86 gcc clang gcc-multilib libseccomp-dev libseccomp-dev:i386 python3 pv wine32 wine strace binutils faketime rustc
-        curl $(echo "aHR0cHM6Ly9yYXcuZ2l0aHVidXNlcmNvbnRlbnQuY29tL2xlYW5wcm92ZXIvZWxhbi9tYXN0ZXIvZWxhbi1pbml0LnNo" | base64 -d) -sSf | sh -s -- -y --default-toolchain stable
-        echo "$HOME/.elan/bin" >> $GITHUB_PATH
+          cat << 'EOF' > x86_builder.h
+          unsigned char x86[1024];int x_len=0;
+          void E(unsigned char b){x86[x_len++]=b;}
+          void E4(uint32_t b){E(b&0xff);E((b>>8)&0xff);E((b>>16)&0xff);E((b>>24)&0xff);}
+          int put_jmp(unsigned char op1,unsigned char op2){
+          if(op2){E(op1);E(op2);}else{E(op1);}
+          int pos=x_len;E4(0);return pos;}
+          void patch_jmp(int pos,int target){
+          uint32_t rel=target-(pos+4);
+          x86[pos]=rel&0xff;x86[pos+1]=(rel>>8)&0xff;
+          x86[pos+2]=(rel>>16)&0xff;x86[pos+3]=(rel>>24)&0xff;}
+          void build_x86(){
+          E(0x48);E(0x81);E(0xec);E4(0x100);
+          E(0x4c);E(0x8d);E(0x05);E4(0);
+          uint32_t lea_pos=x_len;
+          E(0x4d);E(0x31);E(0xc9);
+          int loop_start=x_len;
+          E(0x49);E(0x83);E(0xf9);E(0x00);
+          int jl_halt=put_jmp(0x0f,0x8c);
+          E(0x49);E(0x81);E(0xf9);E4(19997);
+          int jge_halt=put_jmp(0x0f,0x8d);
+          E(0x47);E(0x8b);E(0x14);E(0x88);
+          E(0x47);E(0x8b);E(0x64);E(0x88);E(0x04);
+          E(0x47);E(0x8b);E(0x6c);E(0x88);E(0x08);
+          E(0x41);E(0x81);E(0xfd);E4(9999);
+          int je_halt_c=put_jmp(0x0f,0x84);
+          E(0x41);E(0x81);E(0xfa);E4(9999);
+          int jne_skip_in=put_jmp(0x0f,0x85);
+          E(0x31);E(0xc0);E(0x31);E(0xff);
+          E(0x48);E(0x8d);E(0x74);E(0x24);E(0x08);
+          E(0xba);E4(1);E(0x0f);E(0x05);
+          E(0x48);E(0x83);E(0xf8);E(0x01);
+          int je_read_ok=put_jmp(0x0f,0x84);
+          E(0x41);E(0xba);E4(-1);
+          int jmp_after_in=put_jmp(0xe9,0);
+          patch_jmp(je_read_ok,x_len);
+          E(0x44);E(0x0f);E(0xb6);E(0x54);E(0x24);E(0x08);
+          patch_jmp(jmp_after_in,x_len);
+          int jmp_do_sub=put_jmp(0xe9,0);
+          patch_jmp(jne_skip_in,x_len);
+          E(0x47);E(0x8b);E(0x14);E(0x90);
+          patch_jmp(jmp_do_sub,x_len);
+          E(0x41);E(0x81);E(0xfc);E4(9999);
+          int je_out_1=put_jmp(0x0f,0x84);
+          E(0x41);E(0x81);E(0xfc);E4(9998);
+          int jne_skip_out=put_jmp(0x0f,0x85);
+          E(0x31);E(0xc0);E(0x44);E(0x29);E(0xd0);
+          E(0x89);E(0x44);E(0x24);E(0x08);
+          E(0xba);E4(4);
+          int jmp_do_write=put_jmp(0xe9,0);
+          patch_jmp(je_out_1,x_len);
+          E(0x31);E(0xc0);E(0x44);E(0x29);E(0xd0);
+          E(0x88);E(0x44);E(0x24);E(0x08);
+          E(0xba);E4(1);
+          patch_jmp(jmp_do_write,x_len);
+          E(0xb8);E4(1);E(0xbf);E4(1);
+          E(0x48);E(0x8d);E(0x74);E(0x24);E(0x08);
+          E(0x0f);E(0x05);
+          E(0x45);E(0x31);E(0xf6);E(0x45);E(0x29);E(0xd6);
+          int jmp_check_jmp=put_jmp(0xe9,0);
+          patch_jmp(jne_skip_out,x_len);
+          E(0x47);E(0x8b);E(0x34);E(0xa0);
+          E(0x45);E(0x29);E(0xd6);
+          E(0x47);E(0x89);E(0x34);E(0xa0);
+          patch_jmp(jmp_check_jmp,x_len);
+          E(0x41);E(0x83);E(0xfe);E(0x00);
+          int jg_next_inst=put_jmp(0x0f,0x8f);
+          E(0x4d);E(0x63);E(0xcd);
+          int jmp_loop_start1=put_jmp(0xe9,0);
+          patch_jmp(jmp_loop_start1,loop_start);
+          patch_jmp(jg_next_inst,x_len);
+          E(0x49);E(0x83);E(0xc1);E(0x03);
+          int jmp_loop_start2=put_jmp(0xe9,0);
+          patch_jmp(jmp_loop_start2,loop_start);
+          int halt_pos=x_len;
+          patch_jmp(jl_halt,halt_pos);
+          patch_jmp(jge_halt,halt_pos);
+          patch_jmp(je_halt_c,halt_pos);
+          E(0xb8);E4(60);E(0x31);E(0xff);E(0x0f);E(0x05);
+          
+          uint32_t mem_offset = 4096 - 176 - lea_pos;
+          x86[lea_pos-4]=mem_offset&0xff;
+          x86[lea_pos-3]=(mem_offset>>8)&0xff;
+          x86[lea_pos-2]=(mem_offset>>16)&0xff;
+          x86[lea_pos-1]=(mem_offset>>24)&0xff;}
+          EOF
+          
+          cat << 'EOF' > compiler.c
+          #include<stdio.h>
+          #include<stdlib.h>
+          #include<string.h>
+          #include<stdint.h>
+          #include"x86_builder.h"
+          int main(int argc,char**argv){
+          if(argc<3)return 1;
+          FILE*in=fopen(argv[1],"rb");if(!in)return 1;
+          fseek(in,0,SEEK_END);long sz=ftell(in);rewind(in);
+          int32_t mem[20000]={0};long bit=0;
+          for(long i=0;i<sz;i++){
+          int ch=fgetc(in);
+          if(ch==' ')bit++;
+          else if(ch=='\t'){mem[(bit/32)%20000]|=(1U<<(31-(bit%32)));bit++;}
+          }
+          fclose(in);
+          build_x86();
+          
+          unsigned char elf[176]={
+          0x7f,0x45,0x4c,0x46,2,1,1,0,0,0,0,0,0,0,0,0,
+          2,0,0x3e,0,1,0,0,0,0xb0,0,0x40,0,0,0,0,0,
+          0x40,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+          0,0,0,0,0x40,0,0x38,0,2,0,0,0,0,0,0,0,
+          1,0,0,0,5,0,0,0,0,0,0,0,0,0,0,0,
+          0,0,0x40,0,0,0,0,0,0,0,0x40,0,0,0,0,0,
+          0,0x10,0,0,0,0,0,0,0,0x10,0,0,0,0,0,0,
+          0,0x10,0,0,0,0,0,0,
+          1,0,0,0,6,0,0,0,0,0x10,0,0,0,0,0,0,
+          0,0x10,0x40,0,0,0,0,0,0,0x10,0x40,0,0,0,0,0,
+          0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+          0,0x10,0,0,0,0,0,0
+          };
+          long fsz=80000;
+          memcpy(elf+152,&fsz,4);memcpy(elf+160,&fsz,4);
+          FILE*out=fopen(argv[2],"wb");
+          fwrite(elf,1,176,out);
+          fwrite(x86,1,x_len,out);
+          int pad=4096-176-x_len;
+          unsigned char* zero=calloc(1,pad);
+          fwrite(zero,1,pad,out);
+          fwrite(mem,1,sizeof(mem),out);
+          free(zero);
+          fclose(out);return 0;}
+          EOF
+          gcc -O2 -Wall -o stub_gcc.elf compiler.c
+          clang -O2 -Wall -o stub_clang.elf compiler.c
 
     - name: 2. Forge Core Stubs (GCC and Clang)
       run: |
@@ -214,87 +343,93 @@ jobs:
 
     - name: 5. Forge The Absolute Seed (compiler.inc)
       run: |
-        cat << 'EOF' > forge_compiler.c
-        #include<stdio.h>
-        #include<stdlib.h>
-        #include<string.h>
-        #include<stdint.h>
-        #include"x86_builder.h"
-        int32_t m[20000]={0}; int pc=0;
-        void S(int a,int b,int c){m[pc++]=a;m[pc++]=b;m[pc++]=c;}
-        void set0(int a){S(a,a,pc+3);}
-        void sub(int s,int d){S(s,d,pc+3);}
-        void add(int s,int d){set0(8099);sub(s,8099);sub(8099,d);set0(8099);}
-        void jmp(int t){S(8000,8000,t);}
-        void write_A(int ptr,int tA){set0(tA);add(ptr,tA);}
-        int main(){
-        build_x86();
-        unsigned char elf[120]={
-        0x7f,0x45,0x4c,0x46,2,1,1,0,0,0,0,0,0,0,0,0,
-        2,0,0x3e,0,1,0,0,0,0x78,0,0x40,0,0,0,0,0,
-        0x40,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
-        0,0,0,0,0x40,0,0x38,0,1,0,0,0,0,0,0,0,
-        1,0,0,0,7,0,0,0,0,0,0,0,0,0,0,0,
-        0,0,0x40,0,0,0,0,0,0,0,0x40,0,0,0,0,0,
-        0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
-        0,0,0x20,0,0,0,0,0};
-        int pad=(x_len+3)&~3;
-        long fsz=120+pad+80000;
-        memcpy(elf+96,&fsz,4);memcpy(elf+104,&fsz,4);
-        int d_ptr=1000;
-        for(int i=0;i<120;i++) m[d_ptr++] = -elf[i];
-        for(int i=0;i<x_len;i++) m[d_ptr++] = -x86[i];
-        for(int i=x_len;i<pad;i++) m[d_ptr++] = 0;
-        int end_ptr=d_ptr;
-        m[8000]=0; m[8001]=0; m[8002]=0; m[8003]=0; m[8004]=0; m[8009]=0;
-        m[8006]=1000; m[8007]=end_ptr;
-        m[8010]=-1; m[8013]=32; m[8014]=1; m[8016]=10; m[8020]=20000;
-        pc=0;
-        int L_head=pc;
-        set0(8001);add(8007,8001);sub(8006,8001);
-        int j1=pc;S(8000,8001,0); 
-        int t1=pc+15; write_A(8006,t1);
-        S(0,9999,pc+3);
-        sub(8010,8006);
-        jmp(L_head);
-        m[j1+2]=pc;
-        int L_Word=pc;
-        int j2=pc;S(8000,8020,0);
-        set0(8022);
-        set0(8021);add(8013,8021);
-        int L_Bit=pc;
-        int j_word_done=pc;S(8000,8021,0);
-        set0(8002);S(9999,8002,pc+3);
-        int j_valid=pc;S(8000,8002,0);
-        int j_eof_jump=pc;S(8000,8000,0);
-        m[j_valid+2]=pc;
-        set0(8009);add(8002,8009);add(8016,8009);
-        int j_space=pc;S(8000,8009,0);
-        add(8022,8022);
-        add(8014,8022);
-        sub(8014,8021);
-        jmp(L_Bit);
-        m[j_space+2]=pc;
-        add(8022,8022);
-        sub(8014,8021);
-        jmp(L_Bit);
-        m[j_word_done+2]=pc;
-        set0(8009);sub(8022,8009);
-        S(8009,9998,pc+3);
-        sub(8014,8020);
-        jmp(L_Word);
-        m[j_eof_jump+2]=pc;
-        m[j2+2]=pc;
-        S(0,0,9999);
-        FILE*f=fopen("compiler.inc","wb");
-        for(int i=0;i<20000;i++){
-        for(int b=31;b>=0;b--){
-        if((m[i]>>b)&1)fputc('\t',f);else fputc(' ',f);
-        }}
-        fclose(f);return 0;}
-        EOF
-        gcc -O2 -Wall -o forge_compiler.elf forge_compiler.c
-        ./forge_compiler.elf
+          cat << 'EOF' > forge_compiler.c
+          #include<stdio.h>
+          #include<stdlib.h>
+          #include<string.h>
+          #include<stdint.h>
+          #include"x86_builder.h"
+          int32_t m[20000]={0}; int pc=0;
+          void S(int a,int b,int c){m[pc++]=a;m[pc++]=b;m[pc++]=c;}
+          void set0(int a){S(a,a,pc+3);}
+          void sub(int s,int d){S(s,d,pc+3);}
+          void add(int s,int d){set0(8099);sub(s,8099);sub(8099,d);set0(8099);}
+          void jmp(int t){S(8000,8000,t);}
+          void write_A(int ptr,int tA){set0(tA);add(ptr,tA);}
+          int main(){
+          build_x86();
+          unsigned char elf[176]={
+          0x7f,0x45,0x4c,0x46,2,1,1,0,0,0,0,0,0,0,0,0,
+          2,0,0x3e,0,1,0,0,0,0xb0,0,0x40,0,0,0,0,0,
+          0x40,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+          0,0,0,0,0x40,0,0x38,0,2,0,0,0,0,0,0,0,
+          1,0,0,0,5,0,0,0,0,0,0,0,0,0,0,0,
+          0,0,0x40,0,0,0,0,0,0,0,0x40,0,0,0,0,0,
+          0,0x10,0,0,0,0,0,0,0,0x10,0,0,0,0,0,0,
+          0,0x10,0,0,0,0,0,0,
+          1,0,0,0,6,0,0,0,0,0x10,0,0,0,0,0,0,
+          0,0x10,0x40,0,0,0,0,0,0,0x10,0x40,0,0,0,0,0,
+          0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+          0,0x10,0,0,0,0,0,0
+          };
+          long fsz=80000;
+          memcpy(elf+152,&fsz,4);memcpy(elf+160,&fsz,4);
+          int d_ptr=1000;
+          for(int i=0;i<176;i++) m[d_ptr++] = -elf[i];
+          for(int i=0;i<x_len;i++) m[d_ptr++] = -x86[i];
+          int pad = 4096 - 176 - x_len;
+          for(int i=0;i<pad;i++) m[d_ptr++] = 0;
+          int end_ptr=d_ptr;
+          m[8000]=0; m[8001]=0; m[8002]=0; m[8003]=0; m[8004]=0; m[8009]=0;
+          m[8006]=1000; m[8007]=end_ptr;
+          m[8010]=-1; m[8013]=32; m[8014]=1; m[8016]=10; m[8020]=20000;
+          pc=0;
+          int L_head=pc;
+          set0(8001);add(8007,8001);sub(8006,8001);
+          int j1=pc;S(8000,8001,0); 
+          int t1=pc+15; write_A(8006,t1);
+          S(0,9999,pc+3);
+          sub(8010,8006);
+          jmp(L_head);
+          m[j1+2]=pc;
+          int L_Word=pc;
+          int j2=pc;S(8000,8020,0);
+          set0(8022);
+          set0(8021);add(8013,8021);
+          int L_Bit=pc;
+          int j_word_done=pc;S(8000,8021,0);
+          set0(8002);S(9999,8002,pc+3);
+          int j_valid=pc;S(8000,8002,0);
+          int j_eof_jump=pc;S(8000,8000,0);
+          m[j_valid+2]=pc;
+          set0(8009);add(8002,8009);add(8016,8009);
+          int j_space=pc;S(8000,8009,0);
+          add(8022,8022);
+          add(8014,8022);
+          sub(8014,8021);
+          jmp(L_Bit);
+          m[j_space+2]=pc;
+          add(8022,8022);
+          sub(8014,8021);
+          jmp(L_Bit);
+          m[j_word_done+2]=pc;
+          set0(8009);sub(8022,8009);
+          S(8009,9998,pc+3);
+          sub(8014,8020);
+          jmp(L_Word);
+          m[j_eof_jump+2]=pc;
+          m[j2+2]=pc;
+          S(0,0,9999);
+          FILE*f=fopen("compiler.inc","wb");
+          for(int i=0;i<20000;i++){
+          for(int b=31;b>=0;b--){
+          if((m[i]>>b)&1)fputc('\t',f);else fputc(' ',f);
+          }}
+          fclose(f);return 0;}
+          EOF
+          gcc -O2 -Wall -o forge_compiler.elf forge_compiler.c
+          ./forge_compiler.elf
+
 
     - name: 6. THEOREM 3 - Multi-Lineage Omni-Compiler DDC Convergence
       run: |
