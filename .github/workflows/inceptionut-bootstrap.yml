@@ -11,146 +11,17 @@ jobs:
     steps:
     - uses: actions/checkout@v4
 
-    - name: 1. Setup x86 Builder & Compiler
+    - name: 1. Equip Omni-Level Theorem Proving Arsenal
       run: |
-          cat << 'EOF' > x86_builder.h
-          unsigned char x86[1024];int x_len=0;
-          void E(unsigned char b){x86[x_len++]=b;}
-          void E4(uint32_t b){E(b&0xff);E((b>>8)&0xff);E((b>>16)&0xff);E((b>>24)&0xff);}
-          int put_jmp(unsigned char op1,unsigned char op2){
-          if(op2){E(op1);E(op2);}else{E(op1);}
-          int pos=x_len;E4(0);return pos;}
-          void patch_jmp(int pos,int target){
-          uint32_t rel=target-(pos+4);
-          x86[pos]=rel&0xff;x86[pos+1]=(rel>>8)&0xff;
-          x86[pos+2]=(rel>>16)&0xff;x86[pos+3]=(rel>>24)&0xff;}
-          void build_x86(){
-          E(0x48);E(0x81);E(0xec);E4(0x100);
-          E(0x4c);E(0x8d);E(0x05);E4(0);
-          uint32_t lea_pos=x_len;
-          E(0x4d);E(0x31);E(0xc9);
-          int loop_start=x_len;
-          E(0x49);E(0x83);E(0xf9);E(0x00);
-          int jl_halt=put_jmp(0x0f,0x8c);
-          E(0x49);E(0x81);E(0xf9);E4(19997);
-          int jge_halt=put_jmp(0x0f,0x8d);
-          E(0x47);E(0x8b);E(0x14);E(0x88);
-          E(0x47);E(0x8b);E(0x64);E(0x88);E(0x04);
-          E(0x47);E(0x8b);E(0x6c);E(0x88);E(0x08);
-          E(0x41);E(0x81);E(0xfd);E4(9999);
-          int je_halt_c=put_jmp(0x0f,0x84);
-          E(0x41);E(0x81);E(0xfa);E4(9999);
-          int jne_skip_in=put_jmp(0x0f,0x85);
-          E(0x31);E(0xc0);E(0x31);E(0xff);
-          E(0x48);E(0x8d);E(0x74);E(0x24);E(0x08);
-          E(0xba);E4(1);E(0x0f);E(0x05);
-          E(0x48);E(0x83);E(0xf8);E(0x01);
-          int je_read_ok=put_jmp(0x0f,0x84);
-          E(0x41);E(0xba);E4(-1);
-          int jmp_after_in=put_jmp(0xe9,0);
-          patch_jmp(je_read_ok,x_len);
-          E(0x44);E(0x0f);E(0xb6);E(0x54);E(0x24);E(0x08);
-          patch_jmp(jmp_after_in,x_len);
-          int jmp_do_sub=put_jmp(0xe9,0);
-          patch_jmp(jne_skip_in,x_len);
-          E(0x47);E(0x8b);E(0x14);E(0x90);
-          patch_jmp(jmp_do_sub,x_len);
-          E(0x41);E(0x81);E(0xfc);E4(9999);
-          int je_out_1=put_jmp(0x0f,0x84);
-          E(0x41);E(0x81);E(0xfc);E4(9998);
-          int jne_skip_out=put_jmp(0x0f,0x85);
-          E(0x31);E(0xc0);E(0x44);E(0x29);E(0xd0);
-          E(0x89);E(0x44);E(0x24);E(0x08);
-          E(0xba);E4(4);
-          int jmp_do_write=put_jmp(0xe9,0);
-          patch_jmp(je_out_1,x_len);
-          E(0x31);E(0xc0);E(0x44);E(0x29);E(0xd0);
-          E(0x88);E(0x44);E(0x24);E(0x08);
-          E(0xba);E4(1);
-          patch_jmp(jmp_do_write,x_len);
-          E(0xb8);E4(1);E(0xbf);E4(1);
-          E(0x48);E(0x8d);E(0x74);E(0x24);E(0x08);
-          E(0x0f);E(0x05);
-          E(0x45);E(0x31);E(0xf6);E(0x45);E(0x29);E(0xd6);
-          int jmp_check_jmp=put_jmp(0xe9,0);
-          patch_jmp(jne_skip_out,x_len);
-          E(0x47);E(0x8b);E(0x34);E(0xa0);
-          E(0x45);E(0x29);E(0xd6);
-          E(0x47);E(0x89);E(0x34);E(0xa0);
-          patch_jmp(jmp_check_jmp,x_len);
-          E(0x41);E(0x83);E(0xfe);E(0x00);
-          int jg_next_inst=put_jmp(0x0f,0x8f);
-          E(0x4d);E(0x63);E(0xcd);
-          int jmp_loop_start1=put_jmp(0xe9,0);
-          patch_jmp(jmp_loop_start1,loop_start);
-          patch_jmp(jg_next_inst,x_len);
-          E(0x49);E(0x83);E(0xc1);E(0x03);
-          int jmp_loop_start2=put_jmp(0xe9,0);
-          patch_jmp(jmp_loop_start2,loop_start);
-          int halt_pos=x_len;
-          patch_jmp(jl_halt,halt_pos);
-          patch_jmp(jge_halt,halt_pos);
-          patch_jmp(je_halt_c,halt_pos);
-          E(0xb8);E4(60);E(0x31);E(0xff);E(0x0f);E(0x05);
-          
-          uint32_t mem_offset = 4096 - 176 - lea_pos;
-          x86[lea_pos-4]=mem_offset&0xff;
-          x86[lea_pos-3]=(mem_offset>>8)&0xff;
-          x86[lea_pos-2]=(mem_offset>>16)&0xff;
-          x86[lea_pos-1]=(mem_offset>>24)&0xff;}
-          EOF
-          
-          cat << 'EOF' > compiler.c
-          #include<stdio.h>
-          #include<stdlib.h>
-          #include<string.h>
-          #include<stdint.h>
-          #include"x86_builder.h"
-          int main(int argc,char**argv){
-          if(argc<3)return 1;
-          FILE*in=fopen(argv[1],"rb");if(!in)return 1;
-          fseek(in,0,SEEK_END);long sz=ftell(in);rewind(in);
-          int32_t mem[20000]={0};long bit=0;
-          for(long i=0;i<sz;i++){
-          int ch=fgetc(in);
-          if(ch==' ')bit++;
-          else if(ch=='\t'){mem[(bit/32)%20000]|=(1U<<(31-(bit%32)));bit++;}
-          }
-          fclose(in);
-          build_x86();
-          
-          unsigned char elf[176]={
-          0x7f,0x45,0x4c,0x46,2,1,1,0,0,0,0,0,0,0,0,0,
-          2,0,0x3e,0,1,0,0,0,0xb0,0,0x40,0,0,0,0,0,
-          0x40,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
-          0,0,0,0,0x40,0,0x38,0,2,0,0,0,0,0,0,0,
-          1,0,0,0,5,0,0,0,0,0,0,0,0,0,0,0,
-          0,0,0x40,0,0,0,0,0,0,0,0x40,0,0,0,0,0,
-          0,0x10,0,0,0,0,0,0,0,0x10,0,0,0,0,0,0,
-          0,0x10,0,0,0,0,0,0,
-          1,0,0,0,6,0,0,0,0,0x10,0,0,0,0,0,0,
-          0,0x10,0x40,0,0,0,0,0,0,0x10,0x40,0,0,0,0,0,
-          0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
-          0,0x10,0,0,0,0,0,0
-          };
-          long fsz=80000;
-          memcpy(elf+152,&fsz,4);memcpy(elf+160,&fsz,4);
-          FILE*out=fopen(argv[2],"wb");
-          fwrite(elf,1,176,out);
-          fwrite(x86,1,x_len,out);
-          int pad=4096-176-x_len;
-          unsigned char* zero=calloc(1,pad);
-          fwrite(zero,1,pad,out);
-          fwrite(mem,1,sizeof(mem),out);
-          free(zero);
-          fclose(out);return 0;}
-          EOF
-          gcc -O2 -Wall -o stub_gcc.elf compiler.c
-          clang -O2 -Wall -o stub_clang.elf compiler.c
+        sudo dpkg --add-architecture i386
+        sudo apt-get update
+        sudo DEBIAN_FRONTEND=noninteractive apt-get install -y qemu-system-x86 gcc clang gcc-multilib libseccomp-dev libseccomp-dev:i386 python3 pv wine32 wine strace binutils faketime rustc bubblewrap
+        sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 || true
+        curl $(echo "aHR0cHM6Ly9yYXcuZ2l0aHVidXNlcmNvbnRlbnQuY29tL2xlYW5wcm92ZXIvZWxhbi9tYXN0ZXIvZWxhbi1pbml0LnNo" | base64 -d) -sSf | sh -s -- -y --default-toolchain stable
+        echo "$HOME/.elan/bin" >> $GITHUB_PATH
 
     - name: 2. Forge Core Stubs (GCC and Clang)
       run: |
-        # ここに前回までの x86_builder.h と compiler.c を配置します
         cat << 'EOF' > x86_builder.h
         unsigned char x86[1024];int x_len=0;
         void E(unsigned char b){x86[x_len++]=b;}
@@ -231,13 +102,13 @@ jobs:
         patch_jmp(je_halt_c,halt_pos);
         E(0xb8);E4(60);E(0x31);E(0xff);E(0x0f);E(0x05);
         uint32_t pad=(x_len+3)&~3;
-        uint32_t mem_offset=pad-lea_pos;
+        uint32_t mem_offset=4096-176-lea_pos;
         x86[lea_pos-4]=mem_offset&0xff;
         x86[lea_pos-3]=(mem_offset>>8)&0xff;
         x86[lea_pos-2]=(mem_offset>>16)&0xff;
         x86[lea_pos-1]=(mem_offset>>24)&0xff;}
         EOF
-        
+
         cat << 'EOF' > compiler.c
         #include<stdio.h>
         #include<stdlib.h>
@@ -256,22 +127,30 @@ jobs:
         }
         fclose(in);
         build_x86();
-        unsigned char elf[120]={
+        unsigned char elf[176]={
         0x7f,0x45,0x4c,0x46,2,1,1,0,0,0,0,0,0,0,0,0,
-        2,0,0x3e,0,1,0,0,0,0x78,0,0x40,0,0,0,0,0,
+        2,0,0x3e,0,1,0,0,0,0xb0,0,0x40,0,0,0,0,0,
         0x40,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
-        0,0,0,0,0x40,0,0x38,0,1,0,0,0,0,0,0,0,
-        1,0,0,0,7,0,0,0,0,0,0,0,0,0,0,0,
+        0,0,0,0,0x40,0,0x38,0,2,0,0,0,0,0,0,0,
+        1,0,0,0,5,0,0,0,0,0,0,0,0,0,0,0,
         0,0,0x40,0,0,0,0,0,0,0,0x40,0,0,0,0,0,
+        0,0x10,0,0,0,0,0,0,0,0x10,0,0,0,0,0,0,
+        0,0x10,0,0,0,0,0,0,
+        1,0,0,0,6,0,0,0,0,0x10,0,0,0,0,0,0,
+        0,0x10,0x40,0,0,0,0,0,0,0x10,0x40,0,0,0,0,0,
         0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
-        0,0,0x20,0,0,0,0,0};
-        int pad=(x_len+3)&~3;
-        long fsz=120+pad+80000;
-        memcpy(elf+96,&fsz,4);memcpy(elf+104,&fsz,4);
+        0,0x10,0,0,0,0,0,0
+        };
+        long fsz=80000;
+        memcpy(elf+152,&fsz,4);memcpy(elf+160,&fsz,4);
         FILE*out=fopen(argv[2],"wb");
-        fwrite(elf,1,120,out);fwrite(x86,1,x_len,out);
-        unsigned char zero[4]={0};fwrite(zero,1,pad-x_len,out);
+        fwrite(elf,1,176,out);
+        fwrite(x86,1,x_len,out);
+        int pad=4096-176-x_len;
+        unsigned char* zero=calloc(1,pad);
+        fwrite(zero,1,pad,out);
         fwrite(mem,1,sizeof(mem),out);
+        free(zero);
         fclose(out);return 0;}
         EOF
         gcc -O2 -Wall -o stub_gcc.elf compiler.c
@@ -430,7 +309,6 @@ jobs:
           gcc -O2 -Wall -o forge_compiler.elf forge_compiler.c
           ./forge_compiler.elf
 
-
     - name: 6. THEOREM 3 - Multi-Lineage Omni-Compiler DDC Convergence
       run: |
         ./stub_gcc.elf compiler.inc gen1_gcc.elf
@@ -465,8 +343,6 @@ jobs:
 
     - name: 8. THEOREM 5 - Absolute Environment Non-Interference
       run: |
-          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y bubblewrap
-          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 || true
           WORK_DIR=$(pwd)
           faketime '2026-01-01' bwrap \
           --unshare-user --unshare-pid --unshare-ipc --unshare-uts \
@@ -520,7 +396,6 @@ jobs:
                     idx = (bit // 32) % 20000
                     mem[idx] |= (1 << (31 - (bit % 32)))
                     bit += 1
-            # Adjust negatives for 32-bit signed
             for i in range(20000):
                 if mem[i] >= 0x80000000: mem[i] -= 0x100000000
             pc = 0
@@ -538,17 +413,12 @@ jobs:
             return out
         
         def gen_fuzz():
-            # Generate a tiny Subleq loop that prints 'A' to 'Z'
             m = [0]*20000
             m[8000] = 0; m[8001] = -65; m[8002] = 1; m[8003] = -91
-            # Loop: print A, A++, if A <= Z loop
-            # S(8001, 9998, next) -> print
             m[0] = 8001; m[1] = 9998; m[2] = 3
-            # S(8002, 8001, next) -> A++
             m[3] = 8002; m[4] = 8001; m[5] = 6
-            # S(8003, 8001, 0) -> if A <= 90 loop
             m[6] = 8003; m[7] = 8001; m[8] = 0
-            m[9] = 0; m[10] = 0; m[11] = 9999 # Halt
+            m[9] = 0; m[10] = 0; m[11] = 9999
             
             dna = ""
             for i in range(12):
@@ -557,7 +427,7 @@ jobs:
                     else: dna += " "
             return dna
 
-        for i in range(10): # Fuzzing iterations
+        for i in range(10):
             dna = gen_fuzz()
             open("fuzz.inc", "w").write(dna)
             po = py_subleq(dna)
@@ -586,4 +456,3 @@ jobs:
           *.elf
           strace.log
           elf_headers.txt
-
