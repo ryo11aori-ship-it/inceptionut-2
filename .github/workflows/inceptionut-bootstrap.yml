@@ -1,13 +1,16 @@
 name: True Inceptionut Self-Host
+
 on:
   push:
     branches: [ main ]
   pull_request:
+
 jobs:
   bootstrap:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
       - name: 1. Setup True AOT Compiler
         run: |
           cat << 'EOF' > x86_builder.h
@@ -96,6 +99,7 @@ jobs:
           x86[lea_pos-2]=(mem_offset>>16)&0xff;
           x86[lea_pos-1]=(mem_offset>>24)&0xff;}
           EOF
+          
           cat << 'EOF' > compiler.c
           #include<stdio.h>
           #include<stdlib.h>
@@ -132,6 +136,7 @@ jobs:
           fwrite(mem,1,sizeof(mem),out);
           fclose(out);return 0;}
           EOF
+          
           cat << 'EOF' > forge_compiler.c
           #include<stdio.h>
           #include<stdlib.h>
@@ -157,6 +162,8 @@ jobs:
           0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
           0,0,0x20,0,0,0,0,0};
           int pad=(x_len+3)&~3;
+          long fsz=120+pad+80000;
+          memcpy(elf+96,&fsz,4);memcpy(elf+104,&fsz,4);
           int d_ptr=1000;
           for(int i=0;i<120;i++) m[d_ptr++] = -elf[i];
           for(int i=0;i<x_len;i++) m[d_ptr++] = -x86[i];
@@ -201,6 +208,13 @@ jobs:
           jmp(L_Word);
           m[j_eof_jump+2]=pc;
           m[j2+2]=pc;
+          int L_Eof=pc;
+          int j4=pc;S(8000,8020,0);
+          set0(8022);
+          S(8022,9998,pc+3);
+          sub(8014,8020);
+          jmp(L_Eof);
+          m[j4+2]=pc;
           S(0,0,9999);
           FILE*f=fopen("compiler.inc","wb");
           for(int i=0;i<20000;i++){
@@ -211,16 +225,20 @@ jobs:
           EOF
           gcc -O2 -Wall -o compiler.elf compiler.c
           gcc -O2 -Wall -o forge_compiler.elf forge_compiler.c
+
       - name: 2. Forge True Subleq Compiler (.inc)
         run: ./forge_compiler.elf
+
       - name: 3. Stage 1 (C Compiler -> compiler1.elf)
         run: |
           ./compiler.elf compiler.inc compiler1.elf
           chmod +x compiler1.elf
+
       - name: 4. Stage 2 (Subleq Compiler -> compiler2.elf)
         run: |
           timeout 5s ./compiler1.elf < compiler.inc > compiler2.elf || true
           chmod +x compiler2.elf || true
+
       - name: 5. Inspect compiler2.elf Output
         run: |
           echo "=== compiler1.elf (First 64 bytes) ==="
@@ -233,10 +251,12 @@ jobs:
           fi
           echo "=== DIFF (compiler1 vs compiler2) ==="
           cmp -l compiler1.elf compiler2.elf | head -n 20 || true
+
       - name: 6. Stage 3 (Subleq Compiler -> compiler3.elf)
         run: |
           timeout 5s ./compiler2.elf < compiler.inc > compiler3.elf || true
           chmod +x compiler3.elf || true
+
       - name: 7. Verify Absolute Fixed Point
         run: |
           sha256sum compiler1.elf compiler2.elf compiler3.elf
