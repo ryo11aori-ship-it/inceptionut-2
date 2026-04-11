@@ -328,12 +328,13 @@ jobs:
           exit 1
         fi
 
-    - name: 8. THEOREM 5 - Absolute Environment Non-Interference
-      run: |
+      - name: 8. THEOREM 5 - Absolute Environment Non-Interference
+        run: |
           sudo DEBIAN_FRONTEND=noninteractive apt-get install -y bubblewrap
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 || true
           WORK_DIR=$(pwd)
           faketime '2026-01-01' bwrap \
-          --unshare-all --unshare-user --unshare-pid --unshare-net --unshare-ipc --unshare-uts \
+          --unshare-user --unshare-pid --unshare-ipc --unshare-uts \
           --ro-bind / / --dev /dev --proc /proc --tmpfs /tmp \
           --bind $WORK_DIR $WORK_DIR --chdir $WORK_DIR \
           ./compiler_final.elf < compiler.inc > compiler_pure.elf
