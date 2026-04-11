@@ -400,8 +400,11 @@ jobs:
                 if mem[i] >= 0x80000000: mem[i] -= 0x100000000
             pc = 0
             out = bytearray()
-            while pc >= 0 and pc < 19997:
+            steps = 0
+            while pc >= 0 and pc < 19997 and steps < 10000:
+                steps += 1
                 a = mem[pc]; b = mem[pc+1]; c = mem[pc+2]
+                if c == 9999: break  # CRITICAL: Halt condition was missing here!
                 if a == 9999 or b == 9999:
                     if b == 9998: out.append((-mem[a]) & 0xFF)
                     pc += 3
@@ -414,14 +417,21 @@ jobs:
         
         def gen_fuzz():
             m = [0]*20000
-            m[8000] = 0; m[8001] = -65; m[8002] = 1; m[8003] = -91
-            m[0] = 8001; m[1] = 9998; m[2] = 3
-            m[3] = 8002; m[4] = 8001; m[5] = 6
-            m[6] = 8003; m[7] = 8001; m[8] = 0
-            m[9] = 0; m[10] = 0; m[11] = 9999
-            
+            # Random memory initialization
+            for i in range(8000, 8010): m[i] = random.randint(-100, 100)
+            pc = 0
+            for _ in range(20): # Random instructions
+                op = random.choice(["ADD", "JMP", "PRINT"])
+                if op == "ADD":
+                    m[pc] = random.randint(8000, 8009); m[pc+1] = random.randint(8000, 8009); m[pc+2] = pc + 3
+                elif op == "JMP":
+                    m[pc] = random.randint(8000, 8009); m[pc+1] = random.randint(8000, 8009); m[pc+2] = pc + random.choice([3, 6, 9]) # Forward jump only
+                elif op == "PRINT":
+                    m[pc] = random.randint(8000, 8009); m[pc+1] = 9998; m[pc+2] = pc + 3
+                pc += 3
+            m[pc] = 0; m[pc+1] = 0; m[pc+2] = 9999 # Halt
             dna = ""
-            for i in range(12):
+            for i in range(pc + 3):
                 for b in range(31, -1, -1):
                     if (m[i] >> b) & 1: dna += "\t"
                     else: dna += " "
@@ -436,7 +446,11 @@ jobs:
                 print(f"❌ COMPILATION CRASH {i}")
                 sys.exit(1)
             os.chmod("fuzz.elf", 0o755)
-            er = subprocess.run(["./fuzz.elf"], capture_output=True)
+            try:
+                er = subprocess.run(["./fuzz.elf"], capture_output=True, timeout=2)
+            except subprocess.TimeoutExpired:
+                print(f"❌ EXECUTION TIMEOUT {i}")
+                sys.exit(1)
             if er.stdout != po:
                 print(f"❌ MISMATCH {i}\nPy: {po.hex()}\nC:  {er.stdout.hex()}")
                 sys.exit(1)
